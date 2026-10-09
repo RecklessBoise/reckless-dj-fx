@@ -17,7 +17,8 @@ struct BeatBlockCtx
     double cycleBeats = 1.0;      // selected beat value (triplet-adjusted)
     double timeSamples = 22050.0; // selected time in samples (clamped by each effect)
     float amount = 0.5f;          // 0..1 normalised beat/time (used by REVERB)
-    float level = 0.5f;           // LEVEL/DEPTH (some effects use it as depth, e.g. SPIRAL feedback)
+    float level = 0.5f;           // LEVEL/DEPTH
+    bool on = false;              // the FX is switched on (after quantize); off = trails only
     bool tape = false;
 };
 

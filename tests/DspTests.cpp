@@ -156,6 +156,43 @@ public:
             expectLessThan (peakAfterRamp, 0.02f);
         }
 
+        beginTest ("SPIRAL repeats forever while on, then fades out when switched off");
+        {
+            BeatFxEngine engine;
+            engine.prepare (sr, block);
+            BeatFxEngine::Settings s;
+            s.on = true;
+            s.type = BeatFxType::Spiral;
+            s.beatIdx = 3; // 1/2 beat
+            s.level = 1.0f;
+            s.quantize = false;
+            juce::AudioBuffer<float> buf (2, block);
+            auto runSilence = [&] (int blocks)
+            {
+                float peak = 0.0f;
+                for (int b = 0; b < blocks; ++b)
+                {
+                    buf.clear();
+                    engine.process (buf, s, tempo);
+                    peak = juce::jmax (peak, stats (buf).peak);
+                }
+                return peak;
+            };
+            for (int b = 0; b < 20; ++b) // ~100 ms of noise into the loop
+            {
+                fillNoise (buf, rng);
+                engine.process (buf, s, tempo);
+            }
+            const float early = runSilence (100);   // first ~0.5 s of repeats
+            const float later = runSilence (1000);  // ~5 s later
+            const float evenLater = runSilence (100);
+            expect (evenLater > early * 0.5f, "spiral decays while on: " + juce::String (early) + " -> " + juce::String (evenLater));
+            expect (later < 4.0f);
+            s.on = false;
+            runSilence (1000);
+            expectLessThan (runSilence (50), 0.05f);
+        }
+
         beginTest ("Beat FX off is transparent");
         {
             BeatFxEngine engine;

@@ -14,7 +14,7 @@ Plugin d'effets **VST3 / AU** (macOS, + VST3 Windows via la CI) qui reprend tout
 | **DELAY** | Répétition simple calée sur le tempo | 1/16 → 16 temps |
 | **ECHO** | Écho à fort feedback, filtré, qui continue après l'arrêt (trail) | 1/16 → 16 |
 | **PING PONG** | Échos qui rebondissent gauche ↔ droite | 1/16 → 16 |
-| **SPIRAL** | Les échos se fondent en nappe de réverb et montent en hauteur à chaque répétition ; LEVEL/DEPTH règle aussi la durée de la spirale | 1/16 → 16 |
+| **SPIRAL** | Delay à feedback infini : tant que l'effet est actif, les répétitions ne s'éteignent jamais ; changer le beat fait glisser la hauteur ; à l'arrêt, la boucle s'éteint en écho | 1/16 → 16 |
 | **HELIX** | Boucle quasi infinie qui « tient » le son, glissements de pitch ; à LEVEL/DEPTH 100 % seul l'effet est audible | 1/16 → 16 |
 | **REVERB** | Réverbération, le beat règle la taille (10 → 100 %) | 10 % → 100 % |
 | **FLANGER** | Flanger dont le cycle suit le beat | 1/16 → 16 |

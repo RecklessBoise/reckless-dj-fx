@@ -109,38 +109,29 @@ private:
 };
 
 //==============================================================================
-/** SPIRAL: the echoes are smeared into a reverb-like wash and each repeat climbs in pitch,
-    so the tail "spirals" upwards. LEVEL/DEPTH sets both the wet level and how long it spirals. */
+/** SPIRAL: a delay with infinite feedback. While the FX is on the repeats never die away
+    (a soft limiter in the loop keeps them from blowing up); changing the beat glides the delay
+    time, so the whole loop bends in pitch. Switching the FX off lets the feedback fall so the
+    spiral fades out as a natural echo tail. */
 class SpiralFx final : public BeatEffect
 {
 public:
     void prepare (double sr) override
     {
         line.prepare (sr, kMaxDelaySeconds);
-        shifter.prepare (sr, 0.12);
-        grain = (float) (0.045 * sr);
-        for (auto& f : damp) f.setCutoff (6500.0f, sr);
-        for (auto& f : lowCut) f.setCutoff (140.0f, sr);
-        const int lengths[6] = { 142, 107, 379, 277, 613, 829 };
-        for (int i = 0; i < 6; ++i)
-        {
-            diffL[(size_t) i].prepare ((int) (lengths[i] * sr / 44100.0));
-            diffR[(size_t) i].prepare ((int) ((lengths[i] + 31) * sr / 44100.0));
-            diffL[(size_t) i].g = diffR[(size_t) i].g = 0.68f;
-        }
+        for (auto& f : lowCut) f.setCutoff (35.0f, sr);     // stop DC / sub build-up in the endless loop
+        for (auto& f : highCut) f.setCutoff (15000.0f, sr);
+        feedbackSmooth.setTime (0.05f, sr);
         reset();
     }
 
     void reset() override
     {
         line.reset();
-        shifter.reset();
-        for (auto& a : diffL) a.reset();
-        for (auto& a : diffR) a.reset();
-        for (auto& f : damp) f.reset();
         for (auto& f : lowCut) f.reset();
+        for (auto& f : highCut) f.reset();
+        feedbackSmooth.reset (kOffFeedback);
         delaySmoothed = -1.0f;
-        shiftPhase = 0.0f;
     }
 
     bool isAdditive() const noexcept override { return true; }
@@ -148,58 +139,41 @@ public:
     void beginBlock (const BeatBlockCtx& ctx) override
     {
         BeatEffect::beginBlock (ctx);
-        smoother.setTime (0.25f, ctx.sampleRate); // changing the beat glides the pitch, like the mixer
+        smoother.setTime (0.25f, ctx.sampleRate); // beat changes glide the time -> pitch bend
         target = (float) clampDelay (ctx.timeSamples, line.capacity());
         if (delaySmoothed < 0.0f)
         {
             delaySmoothed = target;
             smoother.reset (target);
         }
-        const float depth = juce::jlimit (0.0f, 1.0f, ctx.level);
-        feedback = 0.55f + 0.38f * depth;                   // deeper = longer spiral
-        const float cents = 40.0f + 80.0f * depth;          // pitch climb per repeat
-        shiftRate = (std::pow (2.0f, cents / 1200.0f) - 1.0f) / grain;
+        targetFeedback = ctx.on ? 1.0f : kOffFeedback;
     }
 
     void process (float inL, float inR, float& outL, float& outR) noexcept override
     {
         delaySmoothed = smoother.process (target);
+        const float fb = feedbackSmooth.process (targetFeedback);
         const float wl = line.readL (delaySmoothed);
         const float wr = line.readR (delaySmoothed);
 
-        // Diffuse the repeat so it turns into a wash
-        float dl = wl, dr = wr;
-        for (auto& a : diffL) dl = a.process (dl);
-        for (auto& a : diffR) dr = a.process (dr);
+        float l = highCut[0].process (wl), r = highCut[1].process (wr);
+        l -= lowCut[0].process (l);
+        r -= lowCut[1].process (r);
 
-        // Pitch the repeat up a little (two-tap rotating-delay shifter with a sin^2 crossfade)
-        shifter.push (dl, dr);
-        shiftPhase += shiftRate;
-        if (shiftPhase >= 1.0f) shiftPhase -= 1.0f;
-        const float p2 = wrap01 (shiftPhase + 0.5);
-        const float d1 = 1.0f + grain * (1.0f - shiftPhase), d2 = 1.0f + grain * (1.0f - p2);
-        const float w1 = std::pow (std::sin (juce::MathConstants<float>::pi * shiftPhase), 2.0f);
-        const float w2 = 1.0f - w1;
-        float pl = shifter.readL (d1) * w1 + shifter.readL (d2) * w2;
-        float pr = shifter.readR (d1) * w1 + shifter.readR (d2) * w2;
-
-        // Keep the spiral clean: damp highs and lows on every pass
-        pl = damp[0].process (pl); pl -= lowCut[0].process (pl);
-        pr = damp[1].process (pr); pr -= lowCut[1].process (pr);
-
-        line.push (sanitize (softClip (inL + feedback * pl)), sanitize (softClip (inR + feedback * pr)));
-        outL = 0.45f * wl + 0.85f * dl;
-        outR = 0.45f * wr + 0.85f * dr;
+        // softClip is transparent at low level, so the loop gain stays at 1 until it gets loud
+        line.push (sanitize (softClip (inL + fb * l)), sanitize (softClip (inR + fb * r)));
+        outL = wl;
+        outR = wr;
         advance();
     }
 
 private:
-    StereoDelayLine line, shifter;
-    OnePole smoother;
-    std::array<OnePole, 2> damp, lowCut;
-    std::array<Allpass, 6> diffL, diffR;
-    float target = 1.0f, delaySmoothed = -1.0f, feedback = 0.7f;
-    float grain = 2000.0f, shiftPhase = 0.0f, shiftRate = 0.0f;
+    static constexpr float kOffFeedback = 0.55f;
+
+    StereoDelayLine line;
+    OnePole smoother, feedbackSmooth;
+    std::array<OnePole, 2> lowCut, highCut;
+    float target = 1.0f, delaySmoothed = -1.0f, targetFeedback = kOffFeedback;
 };
 
 //==============================================================================
@@ -590,6 +564,7 @@ void BeatFxEngine::process (juce::AudioBuffer<float>& buffer, const Settings& s,
     ctx.beatsPerSample = tempo.beatsPerSample;
     ctx.tape = s.tape;
     ctx.level = s.level;
+    ctx.on = gateOpen;
     if (s.sync)
     {
         ctx.cycleBeats = effectiveBeats (currentType, s.beatIdx);
