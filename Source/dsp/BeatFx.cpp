@@ -15,11 +15,11 @@ double clampDelay (double samples, int capacity) noexcept
 }
 
 //==============================================================================
-/** DELAY, ECHO, PING PONG, SPIRAL and HELIX share one feedback delay design. */
+/** DELAY, ECHO, PING PONG and HELIX share one feedback delay design. */
 class DelayFamily final : public BeatEffect
 {
 public:
-    enum class Mode { Delay, Echo, PingPong, Spiral, Helix };
+    enum class Mode { Delay, Echo, PingPong, Helix };
     explicit DelayFamily (Mode m) : mode (m) {}
 
     void prepare (double sr) override
@@ -27,17 +27,11 @@ public:
         sampleRate = sr;
         line.prepare (sr, kMaxDelaySeconds);
         const float damp = mode == Mode::Delay ? 9000.0f : mode == Mode::Echo ? 4500.0f
-                         : mode == Mode::PingPong ? 6000.0f : mode == Mode::Spiral ? 5500.0f : 7000.0f;
+                         : mode == Mode::PingPong ? 6000.0f : 7000.0f;
         for (auto& f : dampL) f.setCutoff (damp, sr);
         for (auto& f : dampR) f.setCutoff (damp, sr);
         hpL.setCutoff (70.0f, sr);
         hpR.setCutoff (70.0f, sr);
-        const int primes[4] = { 142, 107, 379, 277 };
-        for (int i = 0; i < 4; ++i)
-        {
-            diffL[(size_t) i].prepare ((int) (primes[i] * sr / 44100.0));
-            diffR[(size_t) i].prepare ((int) ((primes[i] + 23) * sr / 44100.0));
-        }
         reset();
     }
 
@@ -47,8 +41,6 @@ public:
         for (auto& f : dampL) f.reset();
         for (auto& f : dampR) f.reset();
         hpL.reset(); hpR.reset();
-        for (auto& a : diffL) a.reset();
-        for (auto& a : diffR) a.reset();
         delaySmoothed = -1.0f;
     }
 
@@ -56,8 +48,7 @@ public:
     {
         BeatEffect::beginBlock (ctx);
         float glide = 0.04f;
-        if (mode == Mode::Spiral) glide = 0.25f;
-        else if (mode == Mode::Helix) glide = 0.35f;
+        if (mode == Mode::Helix) glide = 0.35f;
         else if (ctx.tape) glide = 0.45f; // X-Pad tape mode: pitch-bending time changes
         smoother.setTime (glide, ctx.sampleRate);
         target = (float) clampDelay (ctx.timeSamples, line.capacity());
@@ -69,6 +60,7 @@ public:
     }
 
     bool isAdditive() const noexcept override { return true; }
+    bool ducksDry() const noexcept override { return mode == Mode::Helix; }
 
     void process (float inL, float inR, float& outL, float& outR) noexcept override
     {
@@ -89,16 +81,6 @@ public:
                 const float mono = 0.5f * (inL + inR);
                 // Left tap feeds the right line and vice versa -> bouncing repeats
                 push (mono + 0.62f * dampR[0].process (wr), 0.62f * dampL[0].process (wl));
-                break;
-            }
-            case Mode::Spiral:
-            {
-                float dl = dampL[0].process (wl), dr = dampR[0].process (wr);
-                for (auto& a : diffL) dl = a.process (dl);
-                for (auto& a : diffR) dr = a.process (dr);
-                push (inL + 0.74f * dl, inR + 0.74f * dr);
-                wl = 0.6f * wl + 0.4f * dl;
-                wr = 0.6f * wr + 0.4f * dr;
                 break;
             }
             case Mode::Helix:
@@ -123,8 +105,101 @@ private:
     StereoDelayLine line;
     OnePole smoother, hpL, hpR;
     std::array<OnePole, 1> dampL, dampR;
-    std::array<Allpass, 4> diffL, diffR;
     float target = 1.0f, delaySmoothed = -1.0f;
+};
+
+//==============================================================================
+/** SPIRAL: the echoes are smeared into a reverb-like wash and each repeat climbs in pitch,
+    so the tail "spirals" upwards. LEVEL/DEPTH sets both the wet level and how long it spirals. */
+class SpiralFx final : public BeatEffect
+{
+public:
+    void prepare (double sr) override
+    {
+        line.prepare (sr, kMaxDelaySeconds);
+        shifter.prepare (sr, 0.12);
+        grain = (float) (0.045 * sr);
+        for (auto& f : damp) f.setCutoff (6500.0f, sr);
+        for (auto& f : lowCut) f.setCutoff (140.0f, sr);
+        const int lengths[6] = { 142, 107, 379, 277, 613, 829 };
+        for (int i = 0; i < 6; ++i)
+        {
+            diffL[(size_t) i].prepare ((int) (lengths[i] * sr / 44100.0));
+            diffR[(size_t) i].prepare ((int) ((lengths[i] + 31) * sr / 44100.0));
+            diffL[(size_t) i].g = diffR[(size_t) i].g = 0.68f;
+        }
+        reset();
+    }
+
+    void reset() override
+    {
+        line.reset();
+        shifter.reset();
+        for (auto& a : diffL) a.reset();
+        for (auto& a : diffR) a.reset();
+        for (auto& f : damp) f.reset();
+        for (auto& f : lowCut) f.reset();
+        delaySmoothed = -1.0f;
+        shiftPhase = 0.0f;
+    }
+
+    bool isAdditive() const noexcept override { return true; }
+
+    void beginBlock (const BeatBlockCtx& ctx) override
+    {
+        BeatEffect::beginBlock (ctx);
+        smoother.setTime (0.25f, ctx.sampleRate); // changing the beat glides the pitch, like the mixer
+        target = (float) clampDelay (ctx.timeSamples, line.capacity());
+        if (delaySmoothed < 0.0f)
+        {
+            delaySmoothed = target;
+            smoother.reset (target);
+        }
+        const float depth = juce::jlimit (0.0f, 1.0f, ctx.level);
+        feedback = 0.55f + 0.38f * depth;                   // deeper = longer spiral
+        const float cents = 40.0f + 80.0f * depth;          // pitch climb per repeat
+        shiftRate = (std::pow (2.0f, cents / 1200.0f) - 1.0f) / grain;
+    }
+
+    void process (float inL, float inR, float& outL, float& outR) noexcept override
+    {
+        delaySmoothed = smoother.process (target);
+        const float wl = line.readL (delaySmoothed);
+        const float wr = line.readR (delaySmoothed);
+
+        // Diffuse the repeat so it turns into a wash
+        float dl = wl, dr = wr;
+        for (auto& a : diffL) dl = a.process (dl);
+        for (auto& a : diffR) dr = a.process (dr);
+
+        // Pitch the repeat up a little (two-tap rotating-delay shifter with a sin^2 crossfade)
+        shifter.push (dl, dr);
+        shiftPhase += shiftRate;
+        if (shiftPhase >= 1.0f) shiftPhase -= 1.0f;
+        const float p2 = wrap01 (shiftPhase + 0.5);
+        const float d1 = 1.0f + grain * (1.0f - shiftPhase), d2 = 1.0f + grain * (1.0f - p2);
+        const float w1 = std::pow (std::sin (juce::MathConstants<float>::pi * shiftPhase), 2.0f);
+        const float w2 = 1.0f - w1;
+        float pl = shifter.readL (d1) * w1 + shifter.readL (d2) * w2;
+        float pr = shifter.readR (d1) * w1 + shifter.readR (d2) * w2;
+
+        // Keep the spiral clean: damp highs and lows on every pass
+        pl = damp[0].process (pl); pl -= lowCut[0].process (pl);
+        pr = damp[1].process (pr); pr -= lowCut[1].process (pr);
+
+        line.push (sanitize (softClip (inL + feedback * pl)), sanitize (softClip (inR + feedback * pr)));
+        outL = 0.45f * wl + 0.85f * dl;
+        outR = 0.45f * wr + 0.85f * dr;
+        advance();
+    }
+
+private:
+    StereoDelayLine line, shifter;
+    OnePole smoother;
+    std::array<OnePole, 2> damp, lowCut;
+    std::array<Allpass, 6> diffL, diffR;
+    float target = 1.0f, delaySmoothed = -1.0f, feedback = 0.7f;
+    float grain = 2000.0f, shiftPhase = 0.0f, shiftRate = 0.0f;
 };
 
 //==============================================================================
@@ -424,7 +499,7 @@ std::unique_ptr<BeatEffect> createBeatEffect (BeatFxType type)
         case BeatFxType::Delay:         return std::make_unique<DelayFamily> (M::Delay);
         case BeatFxType::Echo:          return std::make_unique<DelayFamily> (M::Echo);
         case BeatFxType::PingPong:      return std::make_unique<DelayFamily> (M::PingPong);
-        case BeatFxType::Spiral:        return std::make_unique<DelayFamily> (M::Spiral);
+        case BeatFxType::Spiral:        return std::make_unique<SpiralFx>();
         case BeatFxType::Helix:         return std::make_unique<DelayFamily> (M::Helix);
         case BeatFxType::Reverb:        return std::make_unique<ReverbFx>();
         case BeatFxType::Flanger:       return std::make_unique<FlangerFx>();
@@ -514,6 +589,7 @@ void BeatFxEngine::process (juce::AudioBuffer<float>& buffer, const Settings& s,
     ctx.beatPos = tempo.beatPos;
     ctx.beatsPerSample = tempo.beatsPerSample;
     ctx.tape = s.tape;
+    ctx.level = s.level;
     if (s.sync)
     {
         ctx.cycleBeats = effectiveBeats (currentType, s.beatIdx);
@@ -587,8 +663,10 @@ void BeatFxEngine::process (juce::AudioBuffer<float>& buffer, const Settings& s,
             // Send is gated, return keeps ringing -> natural trails when the FX is switched off
             const float send = onGain * switchFade;
             fx->process (selL * send, selR * send, wL, wR);
-            outL = xL + wL * level * switchFade;
-            outR = xR + wR * level * switchFade;
+            // HELIX: the original fades out as LEVEL/DEPTH rises (100 % = loop only) and comes back on OFF
+            const float duck = fx->ducksDry() ? level * onGain * switchFade : 0.0f;
+            outL = xL * (1.0f - duck) + wL * level * switchFade;
+            outR = xR * (1.0f - duck) + wR * level * switchFade;
         }
         else
         {

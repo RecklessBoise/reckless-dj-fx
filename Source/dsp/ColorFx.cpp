@@ -163,18 +163,29 @@ void ColorFxEngine::process (juce::AudioBuffer<float>& buffer, const Settings& s
                 }
                 case ColorFxType::Crush:
                 {
+                    // Mixer-style crush: drive into a saturator, then a companded (mu-law) quantiser so the
+                    // quiet tails break up into grit, a light sample-rate reduction and a resonant LPF (left) /
+                    // HPF (right). PARAMETER sets how hard it crushes.
                     if (updateCoeffs)
-                        filter.setParams (left ? 20000.0f * std::pow (2.0f, -a * 4.3f) : 20.0f * std::pow (2.0f, a * 6.0f), 0.9f);
-                    const float bits = 16.0f - a * (9.0f + p * 4.5f);
-                    const float steps = std::pow (2.0f, bits);
-                    const float hold = 1.0f + a * a * (4.0f + 22.0f * p);
+                        filter.setParams (left ? 18000.0f * std::pow (2.0f, -a * 4.6f) : 25.0f * std::pow (2.0f, a * 6.2f),
+                                          1.1f + 1.4f * a);
+                    const float drive = 1.0f + a * (2.5f + 9.0f * p);
+                    const float norm = 1.0f / std::tanh (drive);
+                    const float bits = juce::jmax (3.0f, 16.0f - a * (10.0f + 2.5f * p));
+                    const float steps = std::pow (2.0f, bits - 1.0f);
+                    const float hold = 1.0f + std::pow (a, 1.5f) * (2.0f + 12.0f * p);
+                    constexpr float mu = 48.0f;
+                    const float muNorm = 1.0f / std::log1p (mu);
                     float in[2] = { xL, xR }, out[2];
                     for (int ch = 0; ch < 2; ++ch)
                     {
                         if ((crushCounter[ch] += 1.0f) >= hold)
                         {
                             crushCounter[ch] -= hold;
-                            crushHold[ch] = std::round (in[ch] * steps) / steps;
+                            const float sat = std::tanh (in[ch] * drive) * norm;
+                            const float c = std::copysign (std::log1p (mu * std::abs (sat)) * muNorm, sat);
+                            const float q = std::round (c * steps) / steps;
+                            crushHold[ch] = std::copysign ((std::pow (1.0f + mu, std::abs (q)) - 1.0f) / mu, q);
                         }
                         const auto o = filter.process (ch, crushHold[ch]);
                         out[ch] = in[ch] + ((left ? o.lp : o.hp) - in[ch]) * presence;

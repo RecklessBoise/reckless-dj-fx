@@ -14,8 +14,8 @@ Plugin d'effets **VST3 / AU** (macOS, + VST3 Windows via la CI) qui reprend tout
 | **DELAY** | Répétition simple calée sur le tempo | 1/16 → 16 temps |
 | **ECHO** | Écho à fort feedback, filtré, qui continue après l'arrêt (trail) | 1/16 → 16 |
 | **PING PONG** | Échos qui rebondissent gauche ↔ droite | 1/16 → 16 |
-| **SPIRAL** | Écho diffus ; changer le beat fait glisser la hauteur | 1/16 → 16 |
-| **HELIX** | Boucle quasi infinie qui « tient » le son, glissements de pitch | 1/16 → 16 |
+| **SPIRAL** | Les échos se fondent en nappe de réverb et montent en hauteur à chaque répétition ; LEVEL/DEPTH règle aussi la durée de la spirale | 1/16 → 16 |
+| **HELIX** | Boucle quasi infinie qui « tient » le son, glissements de pitch ; à LEVEL/DEPTH 100 % seul l'effet est audible | 1/16 → 16 |
 | **REVERB** | Réverbération, le beat règle la taille (10 → 100 %) | 10 % → 100 % |
 | **FLANGER** | Flanger dont le cycle suit le beat | 1/16 → 16 |
 | **PHASER** | Phaser 6 étages synchronisé | 1/16 → 16 |
@@ -27,11 +27,11 @@ Plugin d'effets **VST3 / AU** (macOS, + VST3 Windows via la CI) qui reprend tout
 | **MOBIUS** | Banque de filtres « Shepard » qui monte sans fin au rythme du beat | 1/16 → 16 |
 
 ### Sound Color FX (6)
-**SPACE**, **DUB ECHO**, **SWEEP**, **NOISE**, **CRUSH**, **FILTER**. Elles se pilotent avec un potard **COLOR** bipolaire : gauche = grave/LPF, droite = aigu/HPF, centre = son sec. Un potard **PARAMETER** et un bouton **CENTER LOCK** complètent la section : le potard s'arrête au centre comme sur la table.
+**SPACE**, **DUB ECHO**, **SWEEP**, **NOISE**, **CRUSH**, **FILTER**. Elles se pilotent avec un potard **COLOR** bipolaire : gauche = grave/LPF, droite = aigu/HPF, centre = son sec. Un potard **PARAMETER** et un bouton **CENTER LOCK** complètent la section : le potard s'arrête au centre, et il faut le tourner d'environ 15 % de sa course pour en sortir. **CRUSH** sature le son puis le réduit en bits par compression mu-law, ce qui casse les fins de notes en grain comme sur la table.
 
 ### Commandes
 - **BEAT ◄ ►** et **X-PAD**. Le X-Pad est momentané : tu touches une valeur, l'effet s'enclenche, et il se coupe quand tu relâches.
-- **TIME** : un temps libre en ms, qui désactive le BEAT SYNC. **LEVEL / DEPTH** : le potard d'envoi wet/dry.
+- **LEVEL / DEPTH** : le potard d'envoi wet/dry.
 - **FX FREQUENCY LOW / MID / HI** : l'effet ne s'applique qu'aux bandes choisies, grâce à un crossover Linkwitz-Riley qui recombine le signal à plat.
 - **QUANTIZE** : l'effet démarre sur le prochain temps quand le DAW est en lecture.
 - **X-PAD TAPE** : sur Delay, Echo et Ping Pong, changer la valeur fait « glisser » la bande.
@@ -51,7 +51,7 @@ Toute l'interface est dessinée par le code, sans aucune image embarquée, avec 
 ![Détail](docs/screenshot-200.png)
 
 ## Taille de la fenêtre
-Tire le coin en bas à droite de la fenêtre, ou choisis une taille dans le menu **SIZE** : de 60 % à 200 %, proportions conservées. La taille est sauvegardée avec le projet.
+Tire le coin en bas à droite de la fenêtre, ou choisis une taille dans le menu **SIZE** : de 60 % à 200 %, proportions conservées. Le plugin s'ouvre toujours à 100 %.
 
 ## Presets, likes et banque Liked
 - **281 presets d'usine**, rangés par catégories : Delay & Echo, Space & Reverb, Modulation, Filter, Rhythmic, Roll, Tape, Free Time, Color FX, Combos et Performance. Ils sont aussi visibles comme « programs » dans ton DAW.

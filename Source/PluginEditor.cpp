@@ -160,8 +160,8 @@ RecklessDJFXEditor::RecklessDJFXEditor (RecklessDJFXProcessor& p)
     if (auto* c = getConstrainer())
         c->setFixedAspectRatio ((double) kBaseWidth / (double) kBaseHeight);
 
-    const float s = juce::jlimit (0.5f, 2.0f, djfx.editorScale);
-    setSize (juce::roundToInt (kBaseWidth * s), juce::roundToInt (kBaseHeight * s));
+    // Always open at 100 %; the SIZE menu / corner resize still work for the current session
+    setSize (kBaseWidth, kBaseHeight);
 }
 
 RecklessDJFXEditor::~RecklessDJFXEditor()

@@ -134,6 +134,28 @@ public:
                 }
         }
 
+        beginTest ("HELIX at 100 % LEVEL/DEPTH removes the original sound");
+        {
+            BeatFxEngine engine;
+            engine.prepare (sr, block);
+            BeatFxEngine::Settings s;
+            s.on = true;
+            s.type = BeatFxType::Helix;
+            s.beatIdx = 5; // 1 beat = ~469 ms at 128 BPM: nothing has looped back yet in the first ~400 ms
+            s.level = 1.0f;
+            s.quantize = false;
+            juce::AudioBuffer<float> buf (2, block);
+            float peakAfterRamp = 0.0f;
+            for (int b = 0; b < 70; ++b) // ~373 ms
+            {
+                fillNoise (buf, rng);
+                engine.process (buf, s, tempo);
+                if (b >= 30) // after the level smoothing (20 ms time constant) has settled
+                    peakAfterRamp = juce::jmax (peakAfterRamp, stats (buf).peak);
+            }
+            expectLessThan (peakAfterRamp, 0.02f);
+        }
+
         beginTest ("Beat FX off is transparent");
         {
             BeatFxEngine engine;

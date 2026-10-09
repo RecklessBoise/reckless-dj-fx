@@ -17,6 +17,7 @@ struct BeatBlockCtx
     double cycleBeats = 1.0;      // selected beat value (triplet-adjusted)
     double timeSamples = 22050.0; // selected time in samples (clamped by each effect)
     float amount = 0.5f;          // 0..1 normalised beat/time (used by REVERB)
+    float level = 0.5f;           // LEVEL/DEPTH (some effects use it as depth, e.g. SPIRAL feedback)
     bool tape = false;
 };
 
@@ -31,6 +32,8 @@ public:
     virtual void process (float inL, float inR, float& outL, float& outR) noexcept = 0;
     /** Additive effects (delays/reverbs) add a wet signal on top of the dry and keep trails. */
     virtual bool isAdditive() const noexcept { return false; }
+    /** Additive effects that replace the original sound as LEVEL/DEPTH goes up (HELIX at 100 % = effect only). */
+    virtual bool ducksDry() const noexcept { return false; }
     virtual void onActivate() noexcept {}
     virtual void onDeactivate() noexcept {}
 

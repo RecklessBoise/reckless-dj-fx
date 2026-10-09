@@ -56,11 +56,14 @@ class CenterLockSlider final : public juce::Slider
 public:
     explicit CenterLockSlider (APVTS& s) : state (s) {}
     double snapValue (double attempted, DragMode mode) override;
-    void mouseDown (const juce::MouseEvent& e) override { held = false; juce::Slider::mouseDown (e); }
+    void mouseDown (const juce::MouseEvent& e) override;
+
+    /** Knob travel (in -1..1 units, i.e. 15 % of the full turn) you must push through to leave the center. */
+    static constexpr double kLockZone = 0.30;
 
 private:
     APVTS& state;
-    bool held = false;
+    bool locked = false; // the center detent is engaged for the rest of this drag
 };
 
 /** Toggle key bound to a bool parameter. */
@@ -140,7 +143,7 @@ private:
     Knob selectKnob;
     juce::TextButton beatDown { "BEAT -" }, beatUp { "BEAT +" };
     XPad xpad;
-    Knob timeKnob, levelKnob, outKnob;
-    ToggleBtn low, mid, hi, quantize, tape, sync, onButton;
+    Knob levelKnob, outKnob;
+    ToggleBtn low, mid, hi, quantize, tape, onButton;
 };
 } // namespace rdfx::ui

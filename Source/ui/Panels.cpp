@@ -118,27 +118,30 @@ void Knob::parentHierarchyChanged()
 }
 
 //==============================================================================
+void CenterLockSlider::mouseDown (const juce::MouseEvent& e)
+{
+    // Grabbing the knob while it sits at the center starts inside the detent
+    locked = std::abs (getValue()) < 1.0e-6;
+    juce::Slider::mouseDown (e);
+}
+
 double CenterLockSlider::snapValue (double attempted, DragMode mode)
 {
     if (mode == notDragging || getParam (state, ParamID::centerLock) < 0.5f)
         return attempted;
 
     const double current = getValue();
-    if (held)
-    {
-        if (std::abs (attempted) > 0.12)
-        {
-            held = false;
-            return attempted;
-        }
+    if (! locked && ((current > 0.0 && attempted <= 0.0) || (current < 0.0 && attempted >= 0.0)))
+        locked = true; // crossing the center engages CENTER LOCK
+
+    if (! locked)
+        return attempted;
+
+    // Detent: the knob stays at exactly 0 over a wide zone, then continues smoothly (no jump) to the ends
+    const double a = std::abs (attempted);
+    if (a <= kLockZone)
         return 0.0;
-    }
-    if ((current > 0.0 && attempted < 0.0) || (current < 0.0 && attempted > 0.0))
-    {
-        held = true; // stop exactly at the center, like the mixer's CENTER LOCK
-        return 0.0;
-    }
-    return attempted;
+    return std::copysign ((a - kLockZone) / (1.0 - kLockZone), attempted);
 }
 
 //==============================================================================
@@ -434,7 +437,6 @@ BeatFxPanel::BeatFxPanel (RecklessDJFXProcessor& p)
       screen (p),
       selectKnob (state, ParamID::beatType, "FX SELECT", "encoder", kNumBeatFx, false),
       xpad (state),
-      timeKnob (state, ParamID::timeMs, "TIME", "metal", 11, false),
       levelKnob (state, ParamID::level, "LEVEL/DEPTH", "metal", 11, false),
       outKnob (state, ParamID::outGain, "OUTPUT", "metal", 11, false),
       low (state, ParamID::fxLow, "LOW", Col::beatLed),
@@ -442,11 +444,10 @@ BeatFxPanel::BeatFxPanel (RecklessDJFXProcessor& p)
       hi (state, ParamID::fxHi, "HI", Col::beatLed),
       quantize (state, ParamID::quantize, "QUANTIZE", Col::beatLed),
       tape (state, ParamID::tape, "X-PAD TAPE", Col::beatLed),
-      sync (state, ParamID::beatSync, "BEAT SYNC", Col::beatLed),
       onButton (state, ParamID::beatOn, "ON/OFF", Col::onRing, "round")
 {
-    for (auto* c : std::initializer_list<juce::Component*> { &screen, &selectKnob, &beatDown, &beatUp, &xpad, &timeKnob, &levelKnob,
-                                                             &outKnob, &low, &mid, &hi, &quantize, &tape, &sync, &onButton })
+    for (auto* c : std::initializer_list<juce::Component*> { &screen, &selectKnob, &beatDown, &beatUp, &xpad, &levelKnob,
+                                                             &outKnob, &low, &mid, &hi, &quantize, &tape, &onButton })
         addAndMakeVisible (c);
 
     beatDown.setButtonText (juce::String::fromUTF8 ("\xe2\x97\x80"));
@@ -461,7 +462,6 @@ BeatFxPanel::BeatFxPanel (RecklessDJFXProcessor& p)
     selectKnob.getSlider().setMouseDragSensitivity (300);
 
     // Turning TIME switches to free (unsynced) time, like the mixer
-    timeKnob.getSlider().onDragStart = [this] { setParam (state, ParamID::beatSync, 0.0f); };
     levelKnob.getSlider().setDoubleClickReturnValue (true, 0.5);
     outKnob.getSlider().setDoubleClickReturnValue (true, 0.0);
 
@@ -477,9 +477,6 @@ void BeatFxPanel::stepBeat (int delta)
 
 void BeatFxPanel::timerCallback()
 {
-    // TIME only acts when BEAT SYNC is off: grey it out otherwise
-    timeKnob.setAlpha (getParam (state, ParamID::beatSync) > 0.5f ? 0.45f : 1.0f);
-
     // ON/OFF ring pulses with the tempo, only while the effect is audible
     const bool engaged = processor.isBeatFxEngaged();
     if (engaged)
@@ -521,7 +518,6 @@ void BeatFxPanel::paint (juce::Graphics& g)
     drawPrinted (g, "X-PAD", { 28.0f, (float) xpad.getY() - 14.0f, 100.0f, 14.0f }, 11.0f, juce::Justification::centredLeft, 0.8f);
     drawPrintedFrame (g, { 22.0f, 412.0f, 252.0f, 70.0f }, "FX FREQUENCY");
     caption (g, "OUTPUT", outKnob.getBounds());
-    caption (g, "TIME", timeKnob.getBounds());
     caption (g, "LEVEL/DEPTH", levelKnob.getBounds());
     drawPrinted (g, "ON/OFF", onButton.getBounds().toFloat().withY ((float) onButton.getBottom() - 2.0f).withHeight (16.0f), 12.0f);
 }
@@ -530,10 +526,9 @@ void BeatFxPanel::resized()
 {
     screen.setBounds (22, 44, 392, 226);
     selectKnob.setBounds (432, 44, 128, 128);
-    beatDown.setBounds (572, 54, 78, 64);
-    beatUp.setBounds (648, 54, 78, 64);
-    quantize.setBounds (572, 120, 154, 54);
-    sync.setBounds (428, 212, 150, 56);
+    beatDown.setBounds (572, 60, 78, 112);
+    beatUp.setBounds (648, 60, 78, 112);
+    quantize.setBounds (428, 212, 150, 56);
     tape.setBounds (576, 212, 150, 56);
     xpad.setBounds (22, 300, 704, 84);
 
@@ -542,8 +537,7 @@ void BeatFxPanel::resized()
     hi.setBounds (186, 420, 82, 58);
     outKnob.setBounds (102, 490, 88, 88);
 
-    timeKnob.setBounds (280, 396, 170, 170);
-    levelKnob.setBounds (450, 406, 150, 150);
-    onButton.setBounds (600, 418, 132, 132);
+    levelKnob.setBounds (318, 392, 176, 176);
+    onButton.setBounds (548, 404, 152, 152);
 }
 } // namespace rdfx::ui
