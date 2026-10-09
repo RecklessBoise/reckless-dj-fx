@@ -1,4 +1,5 @@
 #include "PluginEditor.h"
+#include "ui/Hardware.h"
 
 using namespace rdfx;
 using namespace rdfx::ui;
@@ -21,6 +22,13 @@ RecklessDJFXContent::RecklessDJFXContent (RecklessDJFXProcessor& p)
     sizeButton.onClick = [this] { showSizeMenu(); };
     tapButton.onClick = [this] { processor.tapTempo(); };
     LookAndFeel::setAccent (saveButton, Colours::like);
+    getProperties().set ("rdfxRoot", true);
+    presetName.getProperties().set ("btn", "lcd");
+    presetName.setTooltip ("Open the preset browser");
+    for (auto* b : { &prevButton, &nextButton, &saveButton, &browseButton, &sizeButton, &tapButton })
+        b->setName (b->getButtonText());
+    bpmMode.setColour (juce::ComboBox::textColourId, hw::Col::lcdText);
+    bpmSlider.setColour (juce::Slider::textBoxTextColourId, hw::Col::lcdText);
 
     bpmMode.addItemList ({ "HOST", "TAP", "MANUAL" }, 1);
     bpmModeAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (p.apvts, ParamID::bpmMode, bpmMode);
@@ -30,6 +38,9 @@ RecklessDJFXContent::RecklessDJFXContent (RecklessDJFXProcessor& p)
     bpmSlider.setColour (juce::Slider::trackColourId, Colours::control);
     bpmSlider.setTooltip ("Manual / tap BPM (drag up and down)");
     bpmAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (p.apvts, ParamID::bpm, bpmSlider);
+    bpmSlider.textFromValueFunction = [] (double v) { return juce::String (v, 1) + " BPM"; };
+    bpmSlider.valueFromTextFunction = [] (const juce::String& t) { return t.getDoubleValue(); };
+    bpmSlider.updateText();
     bpmSlider.onDragStart = [this] { setParam (processor.apvts, ParamID::bpmMode, (float) BpmMode::Manual); };
 
     for (auto* c : std::initializer_list<juce::Component*> { &prevButton, &nextButton, &presetName, &saveButton, &browseButton,
@@ -87,43 +98,50 @@ void RecklessDJFXContent::showSizeMenu()
 
 void RecklessDJFXContent::paint (juce::Graphics& g)
 {
-    g.fillAll (Colours::background);
+    constexpr float texScale = 2.0f; // textures are rendered at 2x so they stay sharp up to 200 %
+    const int W = getWidth(), H = getHeight();
 
-    // Header
-    g.setColour (Colours::panel);
-    g.fillRect (0, 0, getWidth(), 60);
-    g.setColour (Colours::panelEdge);
-    g.drawHorizontalLine (60, 0.0f, (float) getWidth());
+    // Top bar: brushed aluminium strip
+    const auto& strip = hw::brushedStrip ((int) ((float) W * texScale), (int) (64.0f * texScale));
+    g.drawImage (strip, juce::Rectangle<float> (0.0f, 0.0f, (float) W, 64.0f));
 
-    g.setFont (LookAndFeel::font (24.0f));
-    g.setColour (Colours::text);
-    g.drawText ("RECKLESS", 20, 0, 130, 60, juce::Justification::centredLeft);
-    g.setColour (Colours::beat);
-    g.drawText ("DJ FX", 140, 0, 90, 60, juce::Justification::centredLeft);
+    // Faceplate: dark anodised metal, scratched and worn
+    const auto& plate = hw::faceplate ((int) ((float) W * texScale), (int) ((float) (H - 64) * texScale), 0xA9A9A9);
+    g.drawImage (plate, juce::Rectangle<float> (0.0f, 64.0f, (float) W, (float) (H - 64)));
 
-    g.setFont (LookAndFeel::font (10.0f, false));
-    g.setColour (Colours::textDim);
-    g.drawText ("BPM", 816, 4, 60, 12, juce::Justification::centred);
+    hw::drawPanelSeam (g, { 0.0f, 63.0f, (float) W, 2.0f });
+    hw::drawPanelSeam (g, { 359.0f, 65.0f, 2.0f, (float) (H - 65) });
+
+    // Logo, printed on the strip
+    g.setFont (hw::printFont (25.0f));
+    g.setColour (juce::Colours::black.withAlpha (0.5f));
+    g.drawText ("RECKLESS", 20, 1, 140, 64, juce::Justification::centredLeft);
+    g.setColour (hw::Col::print);
+    g.drawText ("RECKLESS", 20, 0, 140, 64, juce::Justification::centredLeft);
+    g.setColour (hw::Col::beatLed);
+    g.drawText ("DJ FX", 146, 0, 80, 64, juce::Justification::centredLeft);
+    g.setFont (hw::printFont (8.5f, false));
+    g.setColour (hw::Col::print.withAlpha (0.55f));
+    g.drawText ("PROFESSIONAL EFFECTS UNIT", 21, 42, 220, 12, juce::Justification::centredLeft);
 }
 
 void RecklessDJFXContent::resized()
 {
-    // Header (designed at 1100 x 664)
-    prevButton.setBounds (244, 13, 34, 34);
-    presetName.setBounds (282, 13, 250, 34);
-    nextButton.setBounds (536, 13, 34, 34);
-    heart.setBounds (576, 13, 34, 34);
-    saveButton.setBounds (616, 13, 64, 34);
-    browseButton.setBounds (686, 13, 86, 34);
+    prevButton.setBounds (236, 6, 48, 52);
+    presetName.setBounds (282, 6, 224, 52);
+    nextButton.setBounds (504, 6, 48, 52);
+    heart.setBounds (550, 6, 48, 52);
+    saveButton.setBounds (596, 6, 76, 52);
+    browseButton.setBounds (670, 6, 92, 52);
 
-    bpmSlider.setBounds (816, 14, 60, 34);
-    bpmMode.setBounds (882, 15, 92, 30);
-    tapButton.setBounds (980, 13, 50, 34);
-    sizeButton.setBounds (1036, 13, 50, 34);
+    bpmSlider.setBounds (766, 6, 112, 52);
+    bpmMode.setBounds (876, 6, 96, 52);
+    tapButton.setBounds (970, 6, 62, 52);
+    sizeButton.setBounds (1030, 6, 64, 52);
 
-    colorPanel.setBounds (16, 74, 330, 576);
-    beatPanel.setBounds (362, 74, 722, 576);
-    browser.setBounds (0, 61, getWidth(), getHeight() - 61);
+    colorPanel.setBounds (0, 64, 360, 600);
+    beatPanel.setBounds (360, 64, 740, 600);
+    browser.setBounds (0, 64, getWidth(), getHeight() - 64);
 }
 
 //==============================================================================

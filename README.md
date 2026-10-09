@@ -39,6 +39,17 @@ Plugin d'effets **VST3 / AU** (macOS, + VST3 Windows via la CI) qui reprend tout
 - **ON / OFF** : les effets de type delay ou reverb gardent leur traîne après l'arrêt.
 - **OUTPUT** : gain de sortie.
 
+## Interface « hardware »
+Toute l'interface est dessinée par le code, sans aucune image embarquée, avec un rendu matériel en 3D :
+- façade en aluminium anodisé brossé, avec rayures, traces d'usure et vis ;
+- potards à jupe crantée et chapeau en alu tourné : reflet anisotrope calculé pixel par pixel et rayures qui tournent avec le potard ;
+- touches en caoutchouc rétroéclairées ;
+- écran couleur avec reflet de vitre ;
+- X-Pad en verre noir ;
+- bouton ON/OFF chromé dont l'anneau LED pulse au tempo.
+
+![Détail](docs/screenshot-200.png)
+
 ## Taille de la fenêtre
 Tire le coin en bas à droite de la fenêtre, ou choisis une taille dans le menu **SIZE** : de 60 % à 200 %, proportions conservées. La taille est sauvegardée avec le projet.
 

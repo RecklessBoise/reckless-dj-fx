@@ -4,6 +4,8 @@
 
 namespace rdfx::ui
 {
+using namespace rdfx::hw;
+
 void setParam (APVTS& state, const char* id, float realValue)
 {
     if (auto* p = state.getParameter (id))
@@ -21,29 +23,31 @@ float getParam (const APVTS& state, const char* id)
     return 0.0f;
 }
 
-static void paintPanel (juce::Graphics& g, juce::Rectangle<int> bounds, const juce::String& title, juce::Colour accent)
+static void screws (juce::Graphics& g, juce::Rectangle<int> b, const juce::String& seed)
 {
-    auto r = bounds.toFloat();
-    g.setColour (Colours::panel);
-    g.fillRoundedRectangle (r, 10.0f);
-    g.setColour (Colours::panelEdge);
-    g.drawRoundedRectangle (r.reduced (0.5f), 10.0f, 1.0f);
-    g.setColour (accent);
-    g.fillRoundedRectangle (r.getX() + 16.0f, r.getY() + 14.0f, 4.0f, 16.0f, 2.0f);
-    g.setFont (LookAndFeel::font (16.0f));
-    g.setColour (Colours::text);
-    g.drawText (title, (int) r.getX() + 28, (int) r.getY() + 10, 300, 24, juce::Justification::centredLeft);
+    const float m = 14.0f;
+    const auto r = b.toFloat();
+    drawScrew (g, { m, m }, 5.0f, seedOf (seed + "a"));
+    drawScrew (g, { r.getWidth() - m, m }, 5.0f, seedOf (seed + "b"));
+    drawScrew (g, { m, r.getHeight() - m }, 5.0f, seedOf (seed + "c"));
+    drawScrew (g, { r.getWidth() - m, r.getHeight() - m }, 5.0f, seedOf (seed + "d"));
+}
+
+/** Prints a caption centred under a knob. */
+static void caption (juce::Graphics& g, const juce::String& text, juce::Rectangle<int> knobBounds)
+{
+    drawPrinted (g, text, knobBounds.toFloat().withY ((float) knobBounds.getBottom() - 6.0f).withHeight (16.0f), 12.0f);
 }
 
 //==============================================================================
-ChoiceButtons::ChoiceButtons (APVTS& state, const char* paramID, const juce::StringArray& labels, int cols, juce::Colour accent)
+ChoiceButtons::ChoiceButtons (APVTS& state, const char* paramID, const juce::StringArray& labels, int cols, juce::Colour led)
     : columns (cols)
 {
     for (int i = 0; i < labels.size(); ++i)
     {
         auto* b = buttons.add (new juce::TextButton (labels[i]));
-        LookAndFeel::setAccent (*b, accent);
-        b->setClickingTogglesState (false);
+        b->setName (juce::String (paramID) + juce::String (i));
+        LookAndFeel::setAccent (*b, led);
         b->onClick = [this, i] { attachment->setValueAsCompleteGesture ((float) i); };
         addAndMakeVisible (b);
     }
@@ -62,39 +66,41 @@ ChoiceButtons::ChoiceButtons (APVTS& state, const char* paramID, const juce::Str
 void ChoiceButtons::resized()
 {
     const int rows = (buttons.size() + columns - 1) / columns;
-    const float gap = 6.0f;
-    const float w = ((float) getWidth() - gap * (float) (columns - 1)) / (float) columns;
-    const float h = ((float) getHeight() - gap * (float) (rows - 1)) / (float) rows;
+    const float w = (float) getWidth() / (float) columns;
+    const float h = (float) getHeight() / (float) rows;
     for (int i = 0; i < buttons.size(); ++i)
     {
         const int r = i / columns, c = i % columns;
-        buttons[i]->setBounds (juce::Rectangle<float> ((float) c * (w + gap), (float) r * (h + gap), w, h).toNearestInt());
+        buttons[i]->setBounds (juce::Rectangle<float> ((float) c * w, (float) r * h, w, h).toNearestInt());
     }
 }
 
 //==============================================================================
-Knob::Knob (APVTS& state, const char* paramID, const juce::String& text, juce::Colour accent, std::unique_ptr<juce::Slider> custom)
+Knob::Knob (APVTS& state, const char* paramID, const juce::String& name, const char* style, int ticks, bool detent,
+            std::unique_ptr<juce::Slider> custom)
     : slider (custom != nullptr ? std::move (custom) : std::make_unique<juce::Slider>())
 {
+    slider->setName (name);
     slider->setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
-    slider->setTextBoxStyle (juce::Slider::TextBoxBelow, false, 90, 18);
-    slider->setRotaryParameters (juce::degreesToRadians (-135.0f), juce::degreesToRadians (135.0f), true);
-    LookAndFeel::setAccent (*slider, accent);
+    slider->setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
+    slider->setRotaryParameters (juce::degreesToRadians (-150.0f), juce::degreesToRadians (150.0f), true);
+    slider->setMouseDragSensitivity (220);
+    slider->getProperties().set ("knob", style);
+    slider->getProperties().set ("ticks", ticks);
+    slider->getProperties().set ("detent", detent);
     addAndMakeVisible (*slider);
-
-    caption.setText (text, juce::dontSendNotification);
-    caption.setJustificationType (juce::Justification::centred);
-    caption.setColour (juce::Label::textColourId, Colours::textDim);
-    addAndMakeVisible (caption);
-
     attachment = std::make_unique<APVTS::SliderAttachment> (state, paramID, *slider);
 }
 
-void Knob::resized()
+void Knob::resized() { slider->setBounds (getLocalBounds()); }
+
+void Knob::parentHierarchyChanged()
 {
-    auto r = getLocalBounds();
-    caption.setBounds (r.removeFromTop (18));
-    slider->setBounds (r);
+    // The value bubble lives in the scaled root component so it follows the editor size
+    juce::Component* root = this;
+    while (root->getParentComponent() != nullptr && ! root->getProperties().contains ("rdfxRoot"))
+        root = root->getParentComponent();
+    slider->setPopupDisplayEnabled (true, true, root->getProperties().contains ("rdfxRoot") ? root : nullptr, 900);
 }
 
 //==============================================================================
@@ -122,21 +128,23 @@ double CenterLockSlider::snapValue (double attempted, DragMode mode)
 }
 
 //==============================================================================
-ToggleBtn::ToggleBtn (APVTS& state, const char* paramID, const juce::String& text, juce::Colour accent)
+ToggleBtn::ToggleBtn (APVTS& state, const char* paramID, const juce::String& text, juce::Colour led, const char* style)
     : juce::TextButton (text)
 {
+    setName (paramID);
     setClickingTogglesState (true);
-    LookAndFeel::setAccent (*this, accent);
+    LookAndFeel::setAccent (*this, led);
+    getProperties().set ("btn", style);
     attachment = std::make_unique<APVTS::ButtonAttachment> (state, paramID, *this);
 }
 
 //==============================================================================
 ColorFxPanel::ColorFxPanel (APVTS& state)
-    : types (state, ParamID::colorType, colorFxNames(), 2, Colours::color),
-      colorKnob (state, ParamID::colorAmt, "COLOR", Colours::color, std::make_unique<CenterLockSlider> (state)),
-      paramKnob (state, ParamID::colorParam, "PARAMETER", Colours::color),
-      onButton (state, ParamID::colorOn, "ON", Colours::color),
-      lockButton (state, ParamID::centerLock, "CENTER LOCK", Colours::color)
+    : types (state, ParamID::colorType, colorFxNames(), 2, Col::colorLed),
+      colorKnob (state, ParamID::colorAmt, "COLOR", "metal", 11, true, std::make_unique<CenterLockSlider> (state)),
+      paramKnob (state, ParamID::colorParam, "PARAMETER", "black", 11, false),
+      onButton (state, ParamID::colorOn, "ON", Col::colorLed),
+      lockButton (state, ParamID::centerLock, "CENTER LOCK", Col::colorLed)
 {
     colorKnob.getSlider().setDoubleClickReturnValue (true, 0.0);
     paramKnob.getSlider().setDoubleClickReturnValue (true, 0.5);
@@ -146,28 +154,38 @@ ColorFxPanel::ColorFxPanel (APVTS& state)
 
 void ColorFxPanel::paint (juce::Graphics& g)
 {
-    paintPanel (g, getLocalBounds(), "SOUND COLOR FX", Colours::color);
-    g.setFont (LookAndFeel::font (11.0f, false));
-    g.setColour (Colours::textDim);
-    g.drawText ("LOW / L", 40, 410, 100, 16, juce::Justification::centredLeft);
-    g.drawText ("HI / R", getWidth() - 140, 410, 100, 16, juce::Justification::centredRight);
+    screws (g, getLocalBounds(), "color");
+    drawPrinted (g, "SOUND COLOR FX", { 30.0f, 14.0f, 200.0f, 22.0f }, 16.0f, juce::Justification::centredLeft);
+    drawPrintedFrame (g, { 18.0f, 58.0f, 324.0f, 164.0f }, "SELECT");
+
+    drawPrinted (g, "COLOR", colorKnob.getBounds().toFloat().withY ((float) colorKnob.getY() - 12.0f).withHeight (16.0f), 13.0f);
+    drawPrinted (g, juce::String::fromUTF8 ("\xe2\x97\x84 LOW"), { 40.0f, (float) colorKnob.getBottom() - 18.0f, 90.0f, 16.0f }, 11.0f,
+                 juce::Justification::centredLeft, 0.75f);
+    drawPrinted (g, juce::String::fromUTF8 ("HI \xe2\x96\xba"), { 230.0f, (float) colorKnob.getBottom() - 18.0f, 90.0f, 16.0f }, 11.0f,
+                 juce::Justification::centredRight, 0.75f);
+    caption (g, "PARAMETER", paramKnob.getBounds());
+    drawPrinted (g, "COLOR FX", onButton.getBounds().toFloat().withY ((float) onButton.getY() - 8.0f).withHeight (12.0f), 11.0f,
+                 juce::Justification::centred, 0.75f);
 }
 
 void ColorFxPanel::resized()
 {
-    types.setBounds (16, 46, getWidth() - 32, 132);
-    colorKnob.setBounds (40, 192, getWidth() - 80, 228);
-    paramKnob.setBounds (16, 432, 140, 130);
-    onButton.setBounds (174, 448, getWidth() - 190, 48);
-    lockButton.setBounds (174, 508, getWidth() - 190, 36);
+    lockButton.setBounds (210, 4, 136, 44);
+    types.setBounds (24, 66, 312, 152);
+    colorKnob.setBounds (70, 248, 220, 220);
+    paramKnob.setBounds (36, 470, 112, 112);
+    onButton.setBounds (186, 494, 150, 64);
 }
 
 //==============================================================================
 XPad::XPad (APVTS& s) : state (s) {}
 
+juce::Rectangle<float> XPad::padArea() const { return getLocalBounds().toFloat().reduced (6.0f); }
+
 int XPad::segmentAt (juce::Point<int> p) const
 {
-    return juce::jlimit (0, kNumBeats - 1, p.x * kNumBeats / juce::jmax (1, getWidth()));
+    const auto a = padArea();
+    return juce::jlimit (0, kNumBeats - 1, (int) (((float) p.x - a.getX()) * kNumBeats / juce::jmax (1.0f, a.getWidth())));
 }
 
 void XPad::paint (juce::Graphics& g)
@@ -175,33 +193,55 @@ void XPad::paint (juce::Graphics& g)
     const auto type = (BeatFxType) (int) getParam (state, ParamID::beatType);
     const int current = (int) getParam (state, ParamID::beatIdx);
     const bool sync = getParam (state, ParamID::beatSync) > 0.5f;
-    const float w = (float) getWidth() / (float) kNumBeats;
+    const auto a = padArea();
+    const float w = a.getWidth() / (float) kNumBeats;
 
-    auto bg = getLocalBounds().toFloat();
-    g.setColour (Colours::lcd);
-    g.fillRoundedRectangle (bg, 8.0f);
+    // Recess + glossy black glass
+    g.setColour (juce::Colours::black.withAlpha (0.85f));
+    g.fillRoundedRectangle (a.expanded (4.0f), 9.0f);
+    g.setGradientFill (juce::ColourGradient (juce::Colour (0xff1d2025), a.getX(), a.getY(),
+                                             juce::Colour (0xff050607), a.getX(), a.getBottom(), false));
+    g.fillRoundedRectangle (a, 6.0f);
 
     for (int i = 0; i < kNumBeats; ++i)
     {
-        auto cell = juce::Rectangle<float> ((float) i * w, 0.0f, w, (float) getHeight()).reduced (3.0f);
+        auto cell = juce::Rectangle<float> (a.getX() + (float) i * w, a.getY(), w, a.getHeight()).reduced (2.0f, 6.0f);
         const bool isTouched = i == touched;
         const bool isCurrent = sync && i == current;
+
+        const auto bar = juce::Rectangle<float> (cell.getWidth() * 0.6f, 3.0f).withCentre ({ cell.getCentreX(), cell.getBottom() - 6.0f });
         if (isTouched || isCurrent)
         {
-            g.setColour (Colours::beat.withAlpha (isTouched ? 0.95f : 0.35f));
-            g.fillRoundedRectangle (cell, 6.0f);
+            const auto col = Col::beatLed;
+            g.setGradientFill (juce::ColourGradient (col.withAlpha (isTouched ? 0.5f : 0.22f), cell.getCentreX(), cell.getBottom(),
+                                                     col.withAlpha (0.0f), cell.getCentreX(), cell.getY(), false));
+            g.fillRoundedRectangle (cell, 4.0f);
+            g.setColour (col.withAlpha (isTouched ? 1.0f : 0.75f));
+            g.fillRoundedRectangle (bar, 1.5f);
         }
-        g.setColour (isTouched ? juce::Colours::black : Colours::text.withAlpha (0.85f));
-        g.setFont (LookAndFeel::font (15.0f));
-        g.drawText (beatDisplayText (type, i), cell.toNearestInt(), juce::Justification::centred);
+        else
+        {
+            g.setColour (juce::Colours::white.withAlpha (0.12f));
+            g.fillRoundedRectangle (bar, 1.5f);
+        }
+
+        g.setFont (printFont (17.0f));
+        g.setColour (isTouched ? juce::Colours::white : Col::print.withAlpha (isCurrent ? 1.0f : 0.7f));
+        g.drawText (beatDisplayText (type, i), cell.withTrimmedBottom (8.0f).toNearestInt(), juce::Justification::centred);
+
         if (i > 0)
         {
-            g.setColour (Colours::panelEdge);
-            g.drawVerticalLine ((int) ((float) i * w), 8.0f, (float) getHeight() - 8.0f);
+            g.setColour (juce::Colours::white.withAlpha (0.06f));
+            g.drawVerticalLine ((int) (a.getX() + (float) i * w), a.getY() + 10.0f, a.getBottom() - 10.0f);
         }
     }
-    g.setColour (Colours::beat.withAlpha (0.5f));
-    g.drawRoundedRectangle (bg.reduced (0.5f), 8.0f, 1.0f);
+
+    // Glass reflection
+    g.setGradientFill (juce::ColourGradient (juce::Colours::white.withAlpha (0.10f), a.getX(), a.getY(),
+                                             juce::Colours::transparentWhite, a.getX(), a.getCentreY(), false));
+    g.fillRoundedRectangle (a.withHeight (a.getHeight() * 0.5f), 6.0f);
+    g.setColour (juce::Colours::white.withAlpha (0.12f));
+    g.drawRoundedRectangle (a.reduced (0.5f), 6.0f, 1.0f);
 }
 
 void XPad::mouseDown (const juce::MouseEvent& e)
@@ -238,78 +278,157 @@ void XPad::mouseUp (const juce::MouseEvent&)
 }
 
 //==============================================================================
-void BeatDisplay::paint (juce::Graphics& g)
+BeatScreen::BeatScreen (RecklessDJFXProcessor& p) : processor (p) {}
+
+juce::Rectangle<float> BeatScreen::listArea() const
+{
+    auto s = screenArea();
+    return { s.getX() + 6.0f, s.getY() + 34.0f, 150.0f, s.getHeight() - 64.0f };
+}
+
+void BeatScreen::paint (juce::Graphics& g)
 {
     auto& st = processor.apvts;
     const auto type = (BeatFxType) (int) getParam (st, ParamID::beatType);
     const int idx = (int) getParam (st, ParamID::beatIdx);
     const bool sync = getParam (st, ParamID::beatSync) > 0.5f;
+    const bool on = getParam (st, ParamID::beatOn) > 0.5f;
     const double bpm = processor.getCurrentBpm();
-    const auto mode = (int) getParam (st, ParamID::bpmMode);
-    const bool engaged = processor.isBeatFxEngaged();
+    const int mode = (int) getParam (st, ParamID::bpmMode);
+    const float level = getParam (st, ParamID::level);
+    const auto s = screenArea();
 
-    auto r = getLocalBounds().toFloat();
-    g.setColour (Colours::lcd);
-    g.fillRoundedRectangle (r, 8.0f);
-    g.setColour (Colours::lcdText.withAlpha (0.25f));
-    g.drawRoundedRectangle (r.reduced (0.5f), 8.0f, 1.0f);
+    drawLcdBezel (g, s);
 
-    g.setColour (Colours::lcdText);
-    g.setFont (LookAndFeel::font (22.0f));
-    g.drawText (beatFxNames()[(int) type], 16, 10, getWidth() - 32, 28, juce::Justification::centredLeft);
+    // Top bar: state, quantize, BPM
+    auto top = s.withHeight (28.0f).reduced (8.0f, 4.0f);
+    g.setColour (juce::Colour (0xff101823));
+    g.fillRect (s.withHeight (28.0f).reduced (1.0f));
+    g.setFont (lcdFont (14.0f));
+    g.setColour (on ? Col::lcdAccent : Col::lcdBlue);
+    g.drawText (on ? "BEAT FX  ON" : "BEAT FX", top, juce::Justification::centredLeft);
+    g.setColour (Col::lcdText);
+    g.setFont (lcdFont (19.0f));
+    g.drawText (juce::String (bpm, 1), top.withTrimmedRight (52.0f), juce::Justification::centredRight);
+    g.setFont (lcdFont (9.5f));
+    g.setColour (Col::lcdBlue);
+    g.drawFittedText (juce::String ("BPM\n") + juce::StringArray { "HOST", "TAP", "MANUAL" }[mode],
+                      top.removeFromRight (48.0f).toNearestInt(), juce::Justification::centredRight, 2);
+    if (getParam (st, ParamID::quantize) > 0.5f)
+    {
+        const auto q = juce::Rectangle<float> (s.getX() + 116.0f, s.getY() + 6.0f, 18.0f, 16.0f);
+        g.setColour (Col::lcdAccent);
+        g.fillRoundedRectangle (q, 2.0f);
+        g.setColour (juce::Colours::black);
+        g.setFont (lcdFont (12.0f));
+        g.drawText ("Q", q, juce::Justification::centred);
+    }
 
+    // Effect list scrolling around the selected one
+    const auto list = listArea();
+    const float rowH = list.getHeight() / 5.0f;
+    for (int k = -2; k <= 2; ++k)
+    {
+        const int t = (int) type + k;
+        if (t < 0 || t >= kNumBeatFx) continue;
+        auto row = juce::Rectangle<float> (list.getX(), list.getY() + (float) (k + 2) * rowH, list.getWidth(), rowH);
+        if (k == 0)
+        {
+            g.setColour (Col::lcdAccent);
+            g.fillRoundedRectangle (row.reduced (0.0f, 1.0f), 3.0f);
+        }
+        g.setColour (k == 0 ? juce::Colours::white : Col::lcdText.withAlpha (0.5f - 0.12f * (float) std::abs (k)));
+        g.setFont (lcdFont (k == 0 ? 17.0f : 14.0f));
+        g.drawText (beatFxNames()[t], row.reduced (8.0f, 0.0f), juce::Justification::centredLeft);
+    }
+
+    // Beat value box
+    auto right = juce::Rectangle<float> (list.getRight() + 10.0f, list.getY(), s.getRight() - list.getRight() - 18.0f, list.getHeight());
+    g.setColour (juce::Colour (0xff0f141b));
+    g.fillRoundedRectangle (right, 4.0f);
+    g.setColour (Col::lcdBlue.withAlpha (0.35f));
+    g.drawRoundedRectangle (right, 4.0f, 1.0f);
+    g.setFont (lcdFont (12.0f));
+    g.setColour (Col::lcdBlue);
+    g.drawText (sync ? (isReverbFx (type) ? "SIZE" : "BEAT") : "TIME (FREE)", right.reduced (8.0f, 4.0f).withHeight (16.0f),
+                juce::Justification::centredLeft);
     const double ms = sync ? TempoSync::beatsToSeconds (BeatFxEngine::effectiveBeats (type, idx), bpm) * 1000.0
                            : (double) getParam (st, ParamID::timeMs);
-    g.setFont (LookAndFeel::font (40.0f));
-    g.drawText (sync ? beatDisplayText (type, idx) : juce::String ("FREE"), getWidth() - 196, 8, 180, 50,
-                juce::Justification::centredRight);
+    g.setColour (Col::lcdText);
+    g.setFont (lcdFont (50.0f));
+    g.drawText (sync ? beatDisplayText (type, idx) : juce::String (juce::roundToInt (ms)), right.reduced (6.0f, 18.0f),
+                juce::Justification::centred);
+    g.setFont (lcdFont (13.0f, false));
+    g.setColour (Col::lcdText.withAlpha (0.8f));
+    auto info = right.reduced (8.0f, 4.0f).removeFromBottom (16.0f);
+    g.drawText (juce::String (juce::roundToInt (ms)) + " ms", info, juce::Justification::centredLeft);
+    g.drawText ("LEVEL " + juce::String (juce::roundToInt (level * 100.0f)) + "%", info, juce::Justification::centredRight);
 
-    g.setFont (LookAndFeel::font (14.0f, false));
-    g.setColour (Colours::lcdText.withAlpha (0.75f));
-    juce::String info;
-    info << (isReverbFx (type) ? juce::String ("SIZE ") + juce::String (sync ? (idx + 1) * 10 : (int) (ms / 40.0)) + "%"
-                               : juce::String ("TIME ") + juce::String (juce::roundToInt (ms)) + " ms")
-         << "     BPM " << juce::String (bpm, 1) << " " << juce::StringArray { "HOST", "TAP", "MANUAL" }[mode];
-    if (getParam (st, ParamID::quantize) > 0.5f) info << "     QUANTIZE";
-    g.drawText (info, 16, getHeight() - 34, getWidth() - 32, 22, juce::Justification::centredLeft);
+    // Beat position bar (mirrors the X-PAD)
+    auto barArea = juce::Rectangle<float> (s.getX() + 8.0f, s.getBottom() - 24.0f, s.getWidth() - 16.0f, 14.0f);
+    const float cw = barArea.getWidth() / (float) kNumBeats;
+    for (int i = 0; i < kNumBeats; ++i)
+    {
+        auto cell = juce::Rectangle<float> (barArea.getX() + (float) i * cw, barArea.getY(), cw, barArea.getHeight()).reduced (1.5f, 2.0f);
+        g.setColour (sync && i == idx ? Col::lcdAccent : Col::lcdBlue.withAlpha (0.18f));
+        g.fillRect (cell);
+    }
 
-    // Engaged LED
-    const auto led = juce::Rectangle<float> (10.0f, 10.0f).withPosition ((float) getWidth() - 22.0f, (float) getHeight() - 28.0f);
-    g.setColour (engaged ? Colours::beat : Colours::panelEdge);
-    g.fillEllipse (led);
+    drawGlass (g, s);
+}
+
+void BeatScreen::mouseDown (const juce::MouseEvent& e)
+{
+    const auto list = listArea();
+    if (! list.contains (e.position))
+        return;
+    const int k = (int) ((e.position.y - list.getY()) / (list.getHeight() / 5.0f)) - 2;
+    const int t = juce::jlimit (0, kNumBeatFx - 1, (int) getParam (processor.apvts, ParamID::beatType) + k);
+    setParam (processor.apvts, ParamID::beatType, (float) t);
+}
+
+void BeatScreen::mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails& wheel)
+{
+    wheelAccum += wheel.deltaY * (wheel.isReversed ? -1.0f : 1.0f);
+    if (std::abs (wheelAccum) < 0.12f)
+        return;
+    const int step = wheelAccum > 0 ? -1 : 1;
+    wheelAccum = 0.0f;
+    const int t = juce::jlimit (0, kNumBeatFx - 1, (int) getParam (processor.apvts, ParamID::beatType) + step);
+    setParam (processor.apvts, ParamID::beatType, (float) t);
 }
 
 //==============================================================================
 BeatFxPanel::BeatFxPanel (RecklessDJFXProcessor& p)
-    : state (p.apvts),
-      types (state, ParamID::beatType, beatFxNames(), 7, Colours::beat),
-      display (p),
+    : processor (p), state (p.apvts),
+      screen (p),
+      selectKnob (state, ParamID::beatType, "FX SELECT", "encoder", kNumBeatFx, false),
       xpad (state),
-      timeKnob (state, ParamID::timeMs, "TIME", Colours::beat),
-      levelKnob (state, ParamID::level, "LEVEL / DEPTH", Colours::beat),
-      outKnob (state, ParamID::outGain, "OUTPUT", Colours::textDim),
-      low (state, ParamID::fxLow, "LOW", Colours::beat),
-      mid (state, ParamID::fxMid, "MID", Colours::beat),
-      hi (state, ParamID::fxHi, "HI", Colours::beat),
-      quantize (state, ParamID::quantize, "QUANTIZE", Colours::beat),
-      tape (state, ParamID::tape, "X-PAD TAPE", Colours::beat),
-      sync (state, ParamID::beatSync, "BEAT SYNC", Colours::beat),
-      onButton (state, ParamID::beatOn, "ON / OFF", Colours::beat)
+      timeKnob (state, ParamID::timeMs, "TIME", "metal", 11, false),
+      levelKnob (state, ParamID::level, "LEVEL/DEPTH", "metal", 11, false),
+      outKnob (state, ParamID::outGain, "OUTPUT", "black", 11, false),
+      low (state, ParamID::fxLow, "LOW", Col::beatLed),
+      mid (state, ParamID::fxMid, "MID", Col::beatLed),
+      hi (state, ParamID::fxHi, "HI", Col::beatLed),
+      quantize (state, ParamID::quantize, "QUANTIZE", Col::beatLed),
+      tape (state, ParamID::tape, "X-PAD TAPE", Col::beatLed),
+      sync (state, ParamID::beatSync, "BEAT SYNC", Col::beatLed),
+      onButton (state, ParamID::beatOn, "ON/OFF", Col::onRing, "round")
 {
-    for (auto* c : std::initializer_list<juce::Component*> { &types, &display, &beatDown, &beatUp, &xpad, &timeKnob, &levelKnob,
-                                                             &outKnob, &low, &mid, &hi, &quantize, &tape, &sync, &onButton,
-                                                             &freqCaption, &beatCaption, &xpadCaption })
+    for (auto* c : std::initializer_list<juce::Component*> { &screen, &selectKnob, &beatDown, &beatUp, &xpad, &timeKnob, &levelKnob,
+                                                             &outKnob, &low, &mid, &hi, &quantize, &tape, &sync, &onButton })
         addAndMakeVisible (c);
 
-    for (auto* l : { &freqCaption, &beatCaption, &xpadCaption })
-    {
-        l->setColour (juce::Label::textColourId, Colours::textDim);
-        l->setFont (LookAndFeel::font (12.0f));
-    }
-    beatCaption.setJustificationType (juce::Justification::centred);
-
+    beatDown.setButtonText (juce::String::fromUTF8 ("\xe2\x97\x80"));
+    beatUp.setButtonText (juce::String::fromUTF8 ("\xe2\x96\xb6"));
+    beatDown.setName ("beatDown");
+    beatUp.setName ("beatUp");
     beatDown.onClick = [this] { stepBeat (-1); };
     beatUp.onClick = [this] { stepBeat (1); };
+
+    // FX SELECT: stepped encoder, one detent per effect
+    selectKnob.getSlider().setRotaryParameters (juce::degreesToRadians (-135.0f), juce::degreesToRadians (135.0f), true);
+    selectKnob.getSlider().setMouseDragSensitivity (300);
 
     // Turning TIME switches to free (unsynced) time, like the mixer
     timeKnob.getSlider().onDragStart = [this] { setParam (state, ParamID::beatSync, 0.0f); };
@@ -328,41 +447,53 @@ void BeatFxPanel::stepBeat (int delta)
 
 void BeatFxPanel::timerCallback()
 {
-    // TIME is only in charge when BEAT SYNC is off
-    timeKnob.setAlpha (getParam (state, ParamID::beatSync) > 0.5f ? 0.5f : 1.0f);
-    display.repaint();
+    timeKnob.setAlpha (getParam (state, ParamID::beatSync) > 0.5f ? 0.75f : 1.0f);
+
+    // ON/OFF ring pulses with the tempo while the effect is engaged
+    const bool engaged = processor.isBeatFxEngaged();
+    const double beatPhase = std::fmod (juce::Time::getMillisecondCounterHiRes() * processor.getCurrentBpm() / 60000.0, 1.0);
+    onButton.getProperties().set ("glow", engaged ? 1.0 - beatPhase : 0.0);
+    if (engaged || onButton.getToggleState())
+        onButton.repaint();
+
+    screen.repaint();
     xpad.repaint();
 }
 
 void BeatFxPanel::paint (juce::Graphics& g)
 {
-    paintPanel (g, getLocalBounds(), "BEAT FX", Colours::beat);
+    screws (g, getLocalBounds(), "beat");
+    drawPrinted (g, "BEAT FX", { 30.0f, 14.0f, 200.0f, 22.0f }, 16.0f, juce::Justification::centredLeft);
+
+    caption (g, "FX SELECT", selectKnob.getBounds());
+    drawPrinted (g, "BEAT", { (float) beatDown.getX(), (float) beatDown.getY() - 8.0f, (float) (beatUp.getRight() - beatDown.getX()), 12.0f },
+                 11.0f, juce::Justification::centred, 0.8f);
+    drawPrinted (g, "X-PAD", { 28.0f, (float) xpad.getY() - 14.0f, 100.0f, 14.0f }, 11.0f, juce::Justification::centredLeft, 0.8f);
+    drawPrintedFrame (g, { 22.0f, 412.0f, 252.0f, 70.0f }, "FX FREQUENCY");
+    caption (g, "OUTPUT", outKnob.getBounds());
+    caption (g, "TIME", timeKnob.getBounds());
+    caption (g, "LEVEL/DEPTH", levelKnob.getBounds());
+    drawPrinted (g, "ON/OFF", onButton.getBounds().toFloat().withY ((float) onButton.getBottom() - 2.0f).withHeight (16.0f), 12.0f);
 }
 
 void BeatFxPanel::resized()
 {
-    types.setBounds (16, 46, getWidth() - 32, 84);
-    display.setBounds (16, 142, 450, 110);
-    beatCaption.setBounds (482, 142, getWidth() - 498, 18);
-    const int bw = (getWidth() - 498 - 8) / 2;
-    beatDown.setBounds (482, 164, bw, 88);
-    beatUp.setBounds (482 + bw + 8, 164, bw, 88);
-    xpadCaption.setBounds (16, 262, 200, 18);
-    xpad.setBounds (16, 282, getWidth() - 32, 70);
+    screen.setBounds (22, 44, 392, 226);
+    selectKnob.setBounds (432, 44, 128, 128);
+    beatDown.setBounds (572, 54, 78, 64);
+    beatUp.setBounds (648, 54, 78, 64);
+    quantize.setBounds (572, 120, 154, 54);
+    sync.setBounds (428, 212, 150, 56);
+    tape.setBounds (576, 212, 150, 56);
+    xpad.setBounds (22, 300, 704, 84);
 
-    timeKnob.setBounds (16, 368, 150, 160);
-    levelKnob.setBounds (176, 368, 150, 160);
+    low.setBounds (28, 420, 82, 58);
+    mid.setBounds (107, 420, 82, 58);
+    hi.setBounds (186, 420, 82, 58);
+    outKnob.setBounds (102, 490, 88, 88);
 
-    const int x0 = 346, w = getWidth() - x0 - 16;
-    freqCaption.setBounds (x0, 366, w, 18);
-    const int third = (w - 16) / 3;
-    low.setBounds (x0, 388, third, 40);
-    mid.setBounds (x0 + third + 8, 388, third, 40);
-    hi.setBounds (x0 + 2 * (third + 8), 388, third, 40);
-    sync.setBounds (x0, 438, third, 36);
-    quantize.setBounds (x0 + third + 8, 438, third, 36);
-    tape.setBounds (x0 + 2 * (third + 8), 438, third, 36);
-    onButton.setBounds (x0, 488, w - 130, 72);
-    outKnob.setBounds (x0 + w - 120, 476, 120, 96);
+    timeKnob.setBounds (280, 396, 170, 170);
+    levelKnob.setBounds (450, 406, 150, 150);
+    onButton.setBounds (600, 418, 132, 132);
 }
 } // namespace rdfx::ui

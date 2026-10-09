@@ -1,4 +1,5 @@
 #include "PresetBrowser.h"
+#include "Hardware.h"
 
 namespace rdfx::ui
 {
@@ -18,8 +19,18 @@ void drawHeart (juce::Graphics& g, juce::Rectangle<float> area, bool filled, juc
 
 void HeartButton::paint (juce::Graphics& g)
 {
-    const auto c = liked ? Colours::like : (isMouseOver() ? Colours::text : Colours::textDim);
-    drawHeart (g, getLocalBounds().toFloat().reduced (3.0f), liked, c);
+    // A rubber key whose heart lights up when the current preset is liked
+    const auto key = getLocalBounds().toFloat().reduced (6.0f);
+    hw::drawRubberButton (g, key, false, isMouseOver(), isMouseButtonDown(), Colours::like, 0x4ea7);
+    const float s = juce::jmin (key.getWidth(), key.getHeight()) * 0.62f;
+    const auto heartArea = juce::Rectangle<float> (s, s).withCentre (key.getCentre());
+    if (liked)
+    {
+        g.setGradientFill (juce::ColourGradient (Colours::like.withAlpha (0.55f), heartArea.getCentre(),
+                                                 Colours::like.withAlpha (0.0f), heartArea.getCentre().translated (s, 0.0f), true));
+        g.fillEllipse (heartArea.expanded (s * 0.4f));
+    }
+    drawHeart (g, heartArea, liked, liked ? Colours::like.brighter (0.2f) : hw::Col::print.withAlpha (isMouseOver() ? 0.95f : 0.7f));
 }
 
 void showSavePresetDialog (PresetManager& manager, juce::Component* parent)
@@ -97,8 +108,12 @@ PresetBrowser::PresetBrowser (PresetManager& m) : manager (m)
     };
     closeButton.onClick = [this] { if (onClose) onClose(); };
     LookAndFeel::setAccent (exportButton, Colours::like);
-    for (auto* b : { &saveButton, &deleteButton, &exportButton, &importButton, &folderButton, &closeButton })
+    for (auto* b : { &saveButton, &deleteButton, &exportButton, &importButton, &folderButton, &closeButton,
+                     &tabAll, &tabFactory, &tabUser, &tabLiked })
+    {
+        b->getProperties().set ("btn", "flat");
         addAndMakeVisible (b);
+    }
 
     countLabel.setColour (juce::Label::textColourId, Colours::textDim);
     countLabel.setJustificationType (juce::Justification::centredRight);

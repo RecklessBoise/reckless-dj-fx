@@ -31,9 +31,16 @@ public:
     void drawButtonText (juce::Graphics&, juce::TextButton&, bool over, bool down) override;
     juce::Font getTextButtonFont (juce::TextButton&, int buttonHeight) override;
     void drawComboBox (juce::Graphics&, int w, int h, bool down, int, int, int, int, juce::ComboBox&) override;
+    void drawLinearSlider (juce::Graphics&, int x, int y, int w, int h, float pos, float minPos, float maxPos,
+                           juce::Slider::SliderStyle, juce::Slider&) override;
+    void drawBubble (juce::Graphics&, juce::BubbleComponent&, const juce::Point<float>& tip, const juce::Rectangle<float>& body) override;
+    juce::Font getSliderPopupFont (juce::Slider&) override;
     juce::Font getComboBoxFont (juce::ComboBox&) override;
     juce::Font getLabelFont (juce::Label&) override;
 
+    /** Component properties understood by this look:
+          Slider:  "knob" = "metal" | "black" | "encoder", "ticks" = int, "detent" = bool
+          Button:  "btn"  = "round" | "rubber" (default) | "flat" (browser UI)            */
     static juce::Colour accentOf (const juce::Component& c);
     static void setAccent (juce::Component& c, juce::Colour accent);
     static juce::Font font (float height, bool bold = true);

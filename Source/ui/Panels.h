@@ -2,6 +2,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "LookAndFeel.h"
+#include "Hardware.h"
 
 class RecklessDJFXProcessor;
 
@@ -13,11 +14,11 @@ using APVTS = juce::AudioProcessorValueTreeState;
 void setParam (APVTS& state, const char* id, float realValue);
 float getParam (const APVTS& state, const char* id);
 
-/** A radio group of buttons bound to a choice parameter. */
+/** A radio group of back-lit rubber keys bound to a choice parameter. */
 class ChoiceButtons final : public juce::Component
 {
 public:
-    ChoiceButtons (APVTS& state, const char* paramID, const juce::StringArray& labels, int columns, juce::Colour accent);
+    ChoiceButtons (APVTS& state, const char* paramID, const juce::StringArray& labels, int columns, juce::Colour led);
     void resized() override;
 
 private:
@@ -26,18 +27,18 @@ private:
     int columns;
 };
 
-/** Rotary knob with a caption, bound to a float parameter. */
+/** Hardware knob bound to a parameter. The caption is printed on the faceplate by the panel. */
 class Knob final : public juce::Component
 {
 public:
-    Knob (APVTS& state, const char* paramID, const juce::String& caption, juce::Colour accent,
+    Knob (APVTS& state, const char* paramID, const juce::String& name, const char* style, int ticks, bool detent,
           std::unique_ptr<juce::Slider> customSlider = nullptr);
     void resized() override;
+    void parentHierarchyChanged() override;
     juce::Slider& getSlider() { return *slider; }
 
 private:
     std::unique_ptr<juce::Slider> slider;
-    juce::Label caption;
     std::unique_ptr<APVTS::SliderAttachment> attachment;
 };
 
@@ -54,11 +55,11 @@ private:
     bool held = false;
 };
 
-/** Toggle button bound to a bool parameter. */
+/** Toggle key bound to a bool parameter. */
 class ToggleBtn final : public juce::TextButton
 {
 public:
-    ToggleBtn (APVTS& state, const char* paramID, const juce::String& text, juce::Colour accent);
+    ToggleBtn (APVTS& state, const char* paramID, const juce::String& text, juce::Colour led, const char* style = "rubber");
 
 private:
     std::unique_ptr<APVTS::ButtonAttachment> attachment;
@@ -79,32 +80,38 @@ private:
 };
 
 //==============================================================================
-/** X-PAD: touch a beat value to engage the Beat FX at that value while held. */
+/** X-PAD: glossy touch strip. Touch a beat value to engage the Beat FX while held. */
 class XPad final : public juce::Component
 {
 public:
-    XPad (APVTS& state);
+    explicit XPad (APVTS& state);
     void paint (juce::Graphics&) override;
     void mouseDown (const juce::MouseEvent&) override;
     void mouseDrag (const juce::MouseEvent&) override;
     void mouseUp (const juce::MouseEvent&) override;
 
 private:
+    juce::Rectangle<float> padArea() const;
     int segmentAt (juce::Point<int> p) const;
     APVTS& state;
     int touched = -1, savedIdx = 0;
     bool savedOn = false, savedSync = true;
 };
 
-/** LCD style read-out: effect, beat value, time and BPM. */
-class BeatDisplay final : public juce::Component
+/** Colour TFT-style screen: effect list, beat value, time, level and BPM. Click/scroll to pick an effect. */
+class BeatScreen final : public juce::Component
 {
 public:
-    BeatDisplay (RecklessDJFXProcessor& p) : processor (p) {}
+    explicit BeatScreen (RecklessDJFXProcessor& p);
     void paint (juce::Graphics&) override;
+    void mouseDown (const juce::MouseEvent&) override;
+    void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
 
 private:
+    juce::Rectangle<float> screenArea() const { return getLocalBounds().toFloat().reduced (8.0f); }
+    juce::Rectangle<float> listArea() const;
     RecklessDJFXProcessor& processor;
+    float wheelAccum = 0.0f;
 };
 
 class BeatFxPanel final : public juce::Component, private juce::Timer
@@ -118,13 +125,13 @@ private:
     void timerCallback() override;
     void stepBeat (int delta);
 
+    RecklessDJFXProcessor& processor;
     APVTS& state;
-    ChoiceButtons types;
-    BeatDisplay display;
-    juce::TextButton beatDown { juce::String::fromUTF8 ("\xe2\x97\x80") }, beatUp { juce::String::fromUTF8 ("\xe2\x96\xb6") };
+    BeatScreen screen;
+    Knob selectKnob;
+    juce::TextButton beatDown { "BEAT -" }, beatUp { "BEAT +" };
     XPad xpad;
     Knob timeKnob, levelKnob, outKnob;
     ToggleBtn low, mid, hi, quantize, tape, sync, onButton;
-    juce::Label freqCaption { {}, "FX FREQUENCY" }, beatCaption { {}, "BEAT" }, xpadCaption { {}, "X-PAD" };
 };
 } // namespace rdfx::ui

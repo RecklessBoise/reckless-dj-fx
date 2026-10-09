@@ -29,6 +29,8 @@ int main (int argc, char** argv)
         save (*editor, "screenshot.png", 1.0f);
         editor->setSize (RecklessDJFXEditor::kBaseWidth * 3 / 4, RecklessDJFXEditor::kBaseHeight * 3 / 4);
         save (*editor, "screenshot-75.png", 1.0f);
+        editor->setSize (RecklessDJFXEditor::kBaseWidth * 2, RecklessDJFXEditor::kBaseHeight * 2);
+        save (*editor, "screenshot-200.png", 1.0f);
     }
 
     {

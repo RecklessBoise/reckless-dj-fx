@@ -47,6 +47,7 @@ set(RDFX_CORE_SOURCES
 set(RDFX_UI_SOURCES
     Source/PluginEditor.cpp
     Source/ui/LookAndFeel.cpp
+    Source/ui/Hardware.cpp
     Source/ui/Panels.cpp
     Source/ui/PresetBrowser.cpp)
 
