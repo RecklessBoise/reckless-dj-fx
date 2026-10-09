@@ -34,6 +34,7 @@ private:
     OnePole dubDampL, dubDampR, gateSmooth;
     juce::Random rng;
     float crushHold[2] {}, crushCounter[2] {};
+    OnePole crushInPower, crushOutPower, crushGain; // CRUSH auto make-up gain (keeps the loudness constant)
     unsigned counter = 0;
     float dubDelaySamples = 1000.0f;
 };

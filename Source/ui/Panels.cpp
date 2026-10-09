@@ -310,6 +310,59 @@ void XPad::mouseUp (const juce::MouseEvent&)
 }
 
 //==============================================================================
+static const char* tempoSourceName (BpmMode m)
+{
+    return m == BpmMode::Host ? "DAW" : m == BpmMode::Tap ? "TAP" : "MANUAL";
+}
+
+BpmDisplay::BpmDisplay (RecklessDJFXProcessor& p) : processor (p)
+{
+    setMouseCursor (juce::MouseCursor::UpDownResizeCursor);
+    startTimerHz (10);
+}
+
+void BpmDisplay::timerCallback()
+{
+    const auto text = juce::String (processor.getCurrentBpm(), 1) + tempoSourceName (processor.getTempoSource());
+    if (text != lastText)
+    {
+        lastText = text;
+        setTooltip (processor.getTempoSource() == BpmMode::Host ? "Tempo synced to the DAW"
+                                                                 : "Drag up/down to set the BPM (no DAW tempo)");
+        repaint();
+    }
+}
+
+void BpmDisplay::paint (juce::Graphics& g)
+{
+    const auto r = getLocalBounds().toFloat().reduced (8.0f);
+    drawLcdBezel (g, r);
+    auto inner = r.reduced (8.0f, 2.0f);
+    g.setColour (Col::lcdText);
+    g.setFont (lcdFont (18.0f));
+    g.drawText (juce::String (processor.getCurrentBpm(), 1), inner.removeFromLeft (inner.getWidth() * 0.62f), juce::Justification::centredLeft);
+    g.setFont (lcdFont (10.0f));
+    g.setColour (Col::lcdBlue);
+    g.drawFittedText (juce::String ("BPM\n") + tempoSourceName (processor.getTempoSource()), inner.toNearestInt(),
+                      juce::Justification::centredRight, 2);
+    drawGlass (g, r);
+}
+
+void BpmDisplay::mouseDown (const juce::MouseEvent&)
+{
+    dragStartBpm = getParam (processor.apvts, ParamID::bpm);
+}
+
+void BpmDisplay::mouseDrag (const juce::MouseEvent& e)
+{
+    if (processor.getTempoSource() == BpmMode::Host)
+        return; // the DAW owns the tempo
+    const float bpm = juce::jlimit (40.0f, 250.0f, dragStartBpm - (float) e.getDistanceFromDragStartY() * 0.25f);
+    setParam (processor.apvts, ParamID::bpm, std::round (bpm * 10.0f) / 10.0f);
+    setParam (processor.apvts, ParamID::bpmMode, (float) BpmMode::Manual);
+}
+
+//==============================================================================
 BeatScreen::BeatScreen (RecklessDJFXProcessor& p) : processor (p) {}
 
 juce::Rectangle<float> BeatScreen::listArea() const
@@ -326,7 +379,7 @@ void BeatScreen::paint (juce::Graphics& g)
     const bool sync = getParam (st, ParamID::beatSync) > 0.5f;
     const bool on = getParam (st, ParamID::beatOn) > 0.5f;
     const double bpm = processor.getCurrentBpm();
-    const int mode = (int) getParam (st, ParamID::bpmMode);
+    const auto source = processor.getTempoSource();
     const float level = getParam (st, ParamID::level);
     const auto s = screenArea();
 
@@ -344,7 +397,7 @@ void BeatScreen::paint (juce::Graphics& g)
     g.drawText (juce::String (bpm, 1), top.withTrimmedRight (52.0f), juce::Justification::centredRight);
     g.setFont (lcdFont (9.5f));
     g.setColour (Col::lcdBlue);
-    g.drawFittedText (juce::String ("BPM\n") + juce::StringArray { "HOST", "TAP", "MANUAL" }[mode],
+    g.drawFittedText (juce::String ("BPM\n") + tempoSourceName (source),
                       top.removeFromRight (48.0f).toNearestInt(), juce::Justification::centredRight, 2);
     if (getParam (st, ParamID::quantize) > 0.5f)
     {

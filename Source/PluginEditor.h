@@ -29,10 +29,7 @@ private:
     juce::TextButton prevButton { juce::String::fromUTF8 ("\xe2\x97\x80") }, nextButton { juce::String::fromUTF8 ("\xe2\x96\xb6") };
     juce::TextButton presetName, saveButton { "SAVE" }, browseButton { "PRESETS" }, sizeButton { "SIZE" }, tapButton { "TAP" };
     rdfx::ui::HeartButton heart;
-    juce::ComboBox bpmMode;
-    juce::Slider bpmSlider;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> bpmModeAttachment;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> bpmAttachment;
+    rdfx::ui::BpmDisplay bpmDisplay;
 
     rdfx::ui::ColorFxPanel colorPanel;
     rdfx::ui::BeatFxPanel beatPanel;

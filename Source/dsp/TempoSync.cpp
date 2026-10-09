@@ -26,15 +26,17 @@ const TempoSync::State& TempoSync::update (juce::AudioPlayHead* playHead, BpmMod
         }
     }
 
-    double bpm = paramBpm;
-    if (mode == BpmMode::Host && hostBpm > 1.0)
-        bpm = hostBpm;
+    // Inside a DAW the effects always follow the DAW tempo and transport. TAP / MANUAL only apply
+    // when the host gives no tempo (standalone app).
+    const bool hostTempo = hostBpm > 1.0;
+    double bpm = hostTempo ? hostBpm : paramBpm;
     bpm = juce::jlimit (20.0, 400.0, bpm);
+    state.source = hostTempo ? BpmMode::Host : (mode == BpmMode::Host ? BpmMode::Manual : mode);
 
     state.bpm = bpm;
     state.beatsPerSample = bpm / (60.0 * sampleRate);
 
-    if (hostPpq.has_value() && mode == BpmMode::Host)
+    if (hostPpq.has_value())
     {
         state.beatPos = *hostPpq;
         state.hostPlaying = true;

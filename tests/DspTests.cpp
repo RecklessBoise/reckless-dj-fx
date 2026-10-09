@@ -134,26 +134,42 @@ public:
                 }
         }
 
-        beginTest ("HELIX at 100 % LEVEL/DEPTH removes the original sound");
+        beginTest ("HELIX loops one beat and, at 100 % LEVEL/DEPTH, no longer lets the live input through");
         {
-            BeatFxEngine engine;
-            engine.prepare (sr, block);
             BeatFxEngine::Settings s;
             s.on = true;
             s.type = BeatFxType::Helix;
-            s.beatIdx = 5; // 1 beat = ~469 ms at 128 BPM: nothing has looped back yet in the first ~400 ms
+            s.beatIdx = 3; // 1/2 beat = ~234 ms at 128 BPM
             s.level = 1.0f;
             s.quantize = false;
-            juce::AudioBuffer<float> buf (2, block);
-            float peakAfterRamp = 0.0f;
-            for (int b = 0; b < 70; ++b) // ~373 ms
+            BeatFxEngine a, b;
+            a.prepare (sr, block);
+            b.prepare (sr, block);
+            juce::AudioBuffer<float> bufA (2, block), bufB (2, block);
+            juce::Random capture (7);
+            for (int i = 0; i < 60; ++i) // ~320 ms: the loop is captured from the same audio in both
             {
-                fillNoise (buf, rng);
-                engine.process (buf, s, tempo);
-                if (b >= 30) // after the level smoothing (20 ms time constant) has settled
-                    peakAfterRamp = juce::jmax (peakAfterRamp, stats (buf).peak);
+                fillNoise (bufA, capture);
+                bufB.makeCopyOf (bufA);
+                a.process (bufA, s, tempo);
+                b.process (bufB, s, tempo);
             }
-            expectLessThan (peakAfterRamp, 0.02f);
+            float maxDiff = 0.0f, peak = 0.0f;
+            for (int i = 0; i < 100; ++i) // then A gets silence and B gets new noise
+            {
+                bufA.clear();
+                fillNoise (bufB, rng);
+                a.process (bufA, s, tempo);
+                b.process (bufB, s, tempo);
+                for (int ch = 0; ch < 2; ++ch)
+                    for (int n = 0; n < block; ++n)
+                    {
+                        maxDiff = juce::jmax (maxDiff, std::abs (bufA.getSample (ch, n) - bufB.getSample (ch, n)));
+                        peak = juce::jmax (peak, std::abs (bufA.getSample (ch, n)));
+                    }
+            }
+            expect (peak > 0.1f, "the loop is not playing");
+            expectLessThan (maxDiff, 1.0e-4f);
         }
 
         beginTest ("SPIRAL repeats forever while on, then fades out when switched off");
@@ -247,6 +263,27 @@ public:
             }
             expectLessThan (maxDiff, 1.0e-4f);
         }
+
+        beginTest ("CRUSH keeps the volume constant across the COLOR / PARAMETER range");
+        for (float amount : { -1.0f, -0.6f, -0.3f, 0.3f, 0.6f, 1.0f })
+            for (float param : { 0.1f, 0.9f })
+            {
+                ColorFxEngine engine;
+                engine.prepare (sr, block);
+                ColorFxEngine::Settings s { true, ColorFxType::Crush, amount, param };
+                juce::AudioBuffer<float> buf (2, block);
+                double inEnergy = 0.0, outEnergy = 0.0;
+                for (int b = 0; b < 400; ++b)
+                {
+                    fillNoise (buf, rng, 0.3f);
+                    const double e = stats (buf).energy;
+                    engine.process (buf, s, tempo);
+                    if (b >= 100) { inEnergy += e; outEnergy += stats (buf).energy; }
+                }
+                const double db = 10.0 * std::log10 (outEnergy / inEnergy);
+                expect (std::abs (db) < 2.0, "COLOR " + juce::String (amount) + " PARAMETER " + juce::String (param)
+                                                 + ": level change " + juce::String (db, 1) + " dB");
+            }
 
         beginTest ("Full processor renders every factory preset safely");
         {

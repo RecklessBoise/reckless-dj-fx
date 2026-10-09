@@ -83,6 +83,7 @@ void RecklessDJFXProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     const auto mode = (BpmMode) juce::jlimit (0, 2, (int) raw.bpmMode->load());
     const auto& t = tempo.update (getPlayHead(), mode, raw.bpm->load(), numSamples);
     currentBpm.store (t.bpm);
+    tempoSource.store ((int) t.source);
 
     colorFx.process (buffer, readColorSettings(), t);    // Sound Color FX first, like on the mixer channel
     beatFx.process (buffer, readBeatSettings(), t);      // then the Beat FX on the master send
@@ -106,6 +107,8 @@ void RecklessDJFXProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
 
 void RecklessDJFXProcessor::tapTempo()
 {
+    if (getTempoSource() == BpmMode::Host)
+        return; // locked to the DAW tempo
     const double bpm = tapper.tap (juce::Time::getMillisecondCounterHiRes());
     if (bpm <= 0.0)
         return;

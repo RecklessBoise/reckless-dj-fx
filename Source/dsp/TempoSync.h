@@ -15,6 +15,7 @@ public:
         double beatPos = 0.0;        // quarter-note position at block start
         bool hostPlaying = false;    // true when beatPos comes from the host transport
         double beatsPerSample = 0.0;
+        BpmMode source = BpmMode::Host; // where the tempo actually comes from (Host = the DAW)
     };
 
     void prepare (double sampleRate) noexcept;

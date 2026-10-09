@@ -42,6 +42,8 @@ public:
 
     /** Tempo actually used by the DSP (for the BPM display). */
     double getCurrentBpm() const noexcept { return currentBpm.load(); }
+    /** Where the tempo in use comes from: Host = the DAW (TAP / MANUAL only without a host tempo). */
+    rdfx::BpmMode getTempoSource() const noexcept { return (rdfx::BpmMode) tempoSource.load(); }
     bool isBeatFxEngaged() const noexcept { return beatEngaged.load(); }
 
     /** Editor size scale, persisted with the plugin state. */
@@ -61,6 +63,7 @@ private:
     juce::SmoothedValue<float> outGain;
     std::unique_ptr<rdfx::PresetManager> presetManager;
     std::atomic<double> currentBpm { 128.0 };
+    std::atomic<int> tempoSource { (int) rdfx::BpmMode::Manual };
     std::atomic<bool> beatEngaged { false };
 
     struct Raw

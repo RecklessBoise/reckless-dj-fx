@@ -33,8 +33,6 @@ public:
     virtual void process (float inL, float inR, float& outL, float& outR) noexcept = 0;
     /** Additive effects (delays/reverbs) add a wet signal on top of the dry and keep trails. */
     virtual bool isAdditive() const noexcept { return false; }
-    /** Additive effects that replace the original sound as LEVEL/DEPTH goes up (HELIX at 100 % = effect only). */
-    virtual bool ducksDry() const noexcept { return false; }
     virtual void onActivate() noexcept {}
     virtual void onDeactivate() noexcept {}
 

@@ -15,7 +15,7 @@ Plugin d'effets **VST3 / AU** (macOS, + VST3 Windows via la CI) qui reprend tout
 | **ECHO** | Écho à fort feedback, filtré, qui continue après l'arrêt (trail) | 1/16 → 16 |
 | **PING PONG** | Échos qui rebondissent gauche ↔ droite | 1/16 → 16 |
 | **SPIRAL** | Delay à feedback infini : tant que l'effet est actif, les répétitions ne s'éteignent jamais ; changer le beat fait glisser la hauteur ; à l'arrêt, la boucle s'éteint en écho | 1/16 → 16 |
-| **HELIX** | Boucle quasi infinie qui « tient » le son, glissements de pitch ; à LEVEL/DEPTH 100 % seul l'effet est audible | 1/16 → 16 |
+| **HELIX** | Enregistre une boucle de la durée du beat puis la rejoue en continu ; changer le beat ré-étire la boucle (la hauteur glisse) ; à LEVEL/DEPTH 100 % on n'entend plus que la boucle | 1/16 → 16 |
 | **REVERB** | Réverbération, le beat règle la taille (10 → 100 %) | 10 % → 100 % |
 | **FLANGER** | Flanger dont le cycle suit le beat | 1/16 → 16 |
 | **PHASER** | Phaser 6 étages synchronisé | 1/16 → 16 |
@@ -27,7 +27,7 @@ Plugin d'effets **VST3 / AU** (macOS, + VST3 Windows via la CI) qui reprend tout
 | **MOBIUS** | Banque de filtres « Shepard » qui monte sans fin au rythme du beat | 1/16 → 16 |
 
 ### Sound Color FX (6)
-**SPACE**, **DUB ECHO**, **SWEEP**, **NOISE**, **CRUSH**, **FILTER**. Elles se pilotent avec un potard **COLOR** bipolaire : gauche = grave/LPF, droite = aigu/HPF, centre = son sec. Un potard **PARAMETER** et un bouton **CENTER LOCK** complètent la section : le potard s'arrête au centre, et il faut le tourner d'environ 15 % de sa course pour en sortir. **CRUSH** sature le son puis le réduit en bits par compression mu-law, ce qui casse les fins de notes en grain comme sur la table.
+**SPACE**, **DUB ECHO**, **SWEEP**, **NOISE**, **CRUSH**, **FILTER**. Elles se pilotent avec un potard **COLOR** bipolaire : gauche = grave/LPF, droite = aigu/HPF, centre = son sec. Un potard **PARAMETER** et un bouton **CENTER LOCK** complètent la section : le potard s'arrête au centre, et il faut le tourner d'environ 15 % de sa course pour en sortir. **CRUSH** sature le son puis le réduit en bits par compression mu-law, ce qui casse les fins de notes en grain comme sur la table. Son volume est compensé automatiquement : tourner COLOR ou PARAMETER change le son, pas le niveau.
 
 ### Commandes
 - **BEAT ◄ ►** et **X-PAD**. Le X-Pad est momentané : tu touches une valeur, l'effet s'enclenche, et il se coupe quand tu relâches.
@@ -35,7 +35,7 @@ Plugin d'effets **VST3 / AU** (macOS, + VST3 Windows via la CI) qui reprend tout
 - **FX FREQUENCY LOW / MID / HI** : l'effet ne s'applique qu'aux bandes choisies, grâce à un crossover Linkwitz-Riley qui recombine le signal à plat.
 - **QUANTIZE** : l'effet démarre sur le prochain temps quand le DAW est en lecture.
 - **X-PAD TAPE** : sur Delay, Echo et Ping Pong, changer la valeur fait « glisser » la bande.
-- **BPM** : HOST (tempo du DAW), TAP ou MANUAL.
+- **BPM** : dans un DAW, le tempo suit toujours celui du projet (affiché « DAW »). TAP et MANUAL ne servent que sans DAW (appli autonome).
 - **ON / OFF** : les effets de type delay ou reverb gardent leur traîne après l'arrêt.
 - **OUTPUT** : gain de sortie.
 

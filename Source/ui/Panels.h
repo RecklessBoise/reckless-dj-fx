@@ -109,6 +109,23 @@ private:
     bool savedOn = false, savedSync = true;
 };
 
+/** Header BPM LCD: shows the tempo actually in use and its source (DAW / TAP / MANUAL).
+    Without a DAW tempo it can be dragged up/down to set a manual BPM. */
+class BpmDisplay final : public juce::Component, public juce::SettableTooltipClient, private juce::Timer
+{
+public:
+    explicit BpmDisplay (RecklessDJFXProcessor& p);
+    void paint (juce::Graphics&) override;
+    void mouseDown (const juce::MouseEvent&) override;
+    void mouseDrag (const juce::MouseEvent&) override;
+
+private:
+    void timerCallback() override;
+    RecklessDJFXProcessor& processor;
+    float dragStartBpm = 128.0f;
+    juce::String lastText;
+};
+
 /** Colour TFT-style screen: effect list, beat value, time, level and BPM. Click/scroll to pick an effect. */
 class BeatScreen final : public juce::Component
 {

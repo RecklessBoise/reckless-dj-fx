@@ -15,11 +15,11 @@ double clampDelay (double samples, int capacity) noexcept
 }
 
 //==============================================================================
-/** DELAY, ECHO, PING PONG and HELIX share one feedback delay design. */
+/** DELAY, ECHO and PING PONG share one feedback delay design. */
 class DelayFamily final : public BeatEffect
 {
 public:
-    enum class Mode { Delay, Echo, PingPong, Helix };
+    enum class Mode { Delay, Echo, PingPong };
     explicit DelayFamily (Mode m) : mode (m) {}
 
     void prepare (double sr) override
@@ -27,11 +27,9 @@ public:
         sampleRate = sr;
         line.prepare (sr, kMaxDelaySeconds);
         const float damp = mode == Mode::Delay ? 9000.0f : mode == Mode::Echo ? 4500.0f
-                         : mode == Mode::PingPong ? 6000.0f : 7000.0f;
+                         : 6000.0f;
         for (auto& f : dampL) f.setCutoff (damp, sr);
         for (auto& f : dampR) f.setCutoff (damp, sr);
-        hpL.setCutoff (70.0f, sr);
-        hpR.setCutoff (70.0f, sr);
         reset();
     }
 
@@ -40,7 +38,6 @@ public:
         line.reset();
         for (auto& f : dampL) f.reset();
         for (auto& f : dampR) f.reset();
-        hpL.reset(); hpR.reset();
         delaySmoothed = -1.0f;
     }
 
@@ -48,8 +45,7 @@ public:
     {
         BeatEffect::beginBlock (ctx);
         float glide = 0.04f;
-        if (mode == Mode::Helix) glide = 0.35f;
-        else if (ctx.tape) glide = 0.45f; // X-Pad tape mode: pitch-bending time changes
+        if (ctx.tape) glide = 0.45f; // X-Pad tape mode: pitch-bending time changes
         smoother.setTime (glide, ctx.sampleRate);
         target = (float) clampDelay (ctx.timeSamples, line.capacity());
         if (delaySmoothed < 0.0f)
@@ -60,7 +56,6 @@ public:
     }
 
     bool isAdditive() const noexcept override { return true; }
-    bool ducksDry() const noexcept override { return mode == Mode::Helix; }
 
     void process (float inL, float inR, float& outL, float& outR) noexcept override
     {
@@ -83,13 +78,6 @@ public:
                 push (mono + 0.62f * dampR[0].process (wr), 0.62f * dampL[0].process (wl));
                 break;
             }
-            case Mode::Helix:
-            {
-                const float dl = dampL[0].process (wl);
-                const float dr = dampR[0].process (wr);
-                push (0.75f * inL + 0.93f * (dl - hpL.process (dl)), 0.75f * inR + 0.93f * (dr - hpR.process (dr)));
-                break;
-            }
         }
 
         outL = wl;
@@ -103,7 +91,7 @@ private:
     Mode mode;
     double sampleRate = 44100.0;
     StereoDelayLine line;
-    OnePole smoother, hpL, hpR;
+    OnePole smoother;
     std::array<OnePole, 1> dampL, dampR;
     float target = 1.0f, delaySmoothed = -1.0f;
 };
@@ -119,8 +107,7 @@ public:
     void prepare (double sr) override
     {
         line.prepare (sr, kMaxDelaySeconds);
-        for (auto& f : lowCut) f.setCutoff (35.0f, sr);     // stop DC / sub build-up in the endless loop
-        for (auto& f : highCut) f.setCutoff (15000.0f, sr);
+        for (auto& f : lowCut) f.setCutoff (25.0f, sr);     // stop DC / sub build-up in the endless loop
         feedbackSmooth.setTime (0.05f, sr);
         reset();
     }
@@ -129,7 +116,6 @@ public:
     {
         line.reset();
         for (auto& f : lowCut) f.reset();
-        for (auto& f : highCut) f.reset();
         feedbackSmooth.reset (kOffFeedback);
         delaySmoothed = -1.0f;
     }
@@ -156,9 +142,9 @@ public:
         const float wl = line.readL (delaySmoothed);
         const float wr = line.readR (delaySmoothed);
 
-        float l = highCut[0].process (wl), r = highCut[1].process (wr);
-        l -= lowCut[0].process (l);
-        r -= lowCut[1].process (r);
+        // No high cut in the loop: it would dull (and shrink) the repeats a little more on every pass
+        const float l = wl - lowCut[0].process (wl);
+        const float r = wr - lowCut[1].process (wr);
 
         // softClip is transparent at low level, so the loop gain stays at 1 until it gets loud
         line.push (sanitize (softClip (inL + fb * l)), sanitize (softClip (inR + fb * r)));
@@ -172,8 +158,111 @@ private:
 
     StereoDelayLine line;
     OnePole smoother, feedbackSmooth;
-    std::array<OnePole, 2> lowCut, highCut;
+    std::array<OnePole, 2> lowCut;
     float target = 1.0f, delaySmoothed = -1.0f, targetFeedback = kOffFeedback;
+};
+
+//==============================================================================
+/** HELIX: when switched on it records one loop of the selected beat length, then plays that loop
+    over and over (the live input is no longer heard at LEVEL/DEPTH 100 %). Changing the beat while
+    it loops re-stretches the loop to the new length, so its pitch glides up or down. */
+class HelixFx final : public BeatEffect
+{
+public:
+    void prepare (double sr) override
+    {
+        line.prepare (sr, kMaxDelaySeconds);
+        lengthSmooth.setTime (0.30f, sr);
+        fade = juce::jmax (8, (int) (0.006 * sr));
+        reset();
+    }
+
+    void reset() override
+    {
+        line.reset();
+        active = looping = false;
+        capLen = recorded = 0;
+        readPos = 0.0;
+    }
+
+    void onActivate() noexcept override
+    {
+        active = true;
+        looping = false;
+        loopStart = line.getWritePos();
+        capLen = recorded = 0;
+        readPos = 0.0;
+    }
+
+    void onDeactivate() noexcept override { active = looping = false; }
+
+    void beginBlock (const BeatBlockCtx& ctx) override
+    {
+        BeatEffect::beginBlock (ctx);
+        target = (float) clampDelay (ctx.timeSamples, line.capacity() / 2);
+    }
+
+    void process (float inL, float inR, float& outL, float& outR) noexcept override
+    {
+        if (! looping)
+        {
+            // Idle (keeps a pre-roll for the loop crossfade) or capturing the first pass
+            line.push (inL, inR);
+            outL = inL;
+            outR = inR;
+            if (active)
+            {
+                if (capLen == 0)
+                {
+                    capLen = juce::jmax (fade * 4, (int) target);
+                    lengthSmooth.reset (target);
+                }
+                if (++recorded >= capLen)
+                {
+                    looping = true;
+                    readPos = 0.0;
+                }
+            }
+            advance();
+            return;
+        }
+
+        // Loop playback; a shorter beat plays the loop faster (pitch up), a longer one slower
+        const double rate = (double) capLen / juce::jmax (1.0f, lengthSmooth.process (target));
+        readPos += rate;
+        while (readPos >= capLen) readPos -= capLen;
+
+        float l = readAt (readPos, true), r = readAt (readPos, false);
+        const double toEnd = capLen - readPos;
+        if (toEnd < fade)
+        {
+            // Blend the end of the loop into the audio just before its start -> seamless wrap
+            const float w = (float) (toEnd / fade);
+            l = l * w + readAt (-toEnd, true) * (1.0f - w);
+            r = r * w + readAt (-toEnd, false) * (1.0f - w);
+        }
+        outL = l;
+        outR = r;
+        advance();
+    }
+
+private:
+    float readAt (double pos, bool left) const noexcept
+    {
+        const double p = (double) loopStart + pos;
+        const int i = (int) std::floor (p);
+        const float t = (float) (p - i);
+        const float a = left ? line.atL (i) : line.atR (i);
+        const float b = left ? line.atL (i + 1) : line.atR (i + 1);
+        return a + (b - a) * t;
+    }
+
+    StereoDelayLine line;
+    OnePole lengthSmooth;
+    bool active = false, looping = false;
+    int loopStart = 0, capLen = 0, recorded = 0, fade = 256;
+    double readPos = 0.0;
+    float target = 22050.0f;
 };
 
 //==============================================================================
@@ -474,7 +563,7 @@ std::unique_ptr<BeatEffect> createBeatEffect (BeatFxType type)
         case BeatFxType::Echo:          return std::make_unique<DelayFamily> (M::Echo);
         case BeatFxType::PingPong:      return std::make_unique<DelayFamily> (M::PingPong);
         case BeatFxType::Spiral:        return std::make_unique<SpiralFx>();
-        case BeatFxType::Helix:         return std::make_unique<DelayFamily> (M::Helix);
+        case BeatFxType::Helix:         return std::make_unique<HelixFx>();
         case BeatFxType::Reverb:        return std::make_unique<ReverbFx>();
         case BeatFxType::Flanger:       return std::make_unique<FlangerFx>();
         case BeatFxType::Phaser:        return std::make_unique<PhaserFx>();
@@ -638,10 +727,8 @@ void BeatFxEngine::process (juce::AudioBuffer<float>& buffer, const Settings& s,
             // Send is gated, return keeps ringing -> natural trails when the FX is switched off
             const float send = onGain * switchFade;
             fx->process (selL * send, selR * send, wL, wR);
-            // HELIX: the original fades out as LEVEL/DEPTH rises (100 % = loop only) and comes back on OFF
-            const float duck = fx->ducksDry() ? level * onGain * switchFade : 0.0f;
-            outL = xL * (1.0f - duck) + wL * level * switchFade;
-            outR = xR * (1.0f - duck) + wR * level * switchFade;
+            outL = xL + wL * level * switchFade;
+            outR = xR + wR * level * switchFade;
         }
         else
         {

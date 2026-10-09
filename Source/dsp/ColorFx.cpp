@@ -13,6 +13,10 @@ void ColorFxEngine::prepare (double sr, int)
     amountSmooth.setTime (0.015f, sr);
     paramSmooth.setTime (0.03f, sr);
     gateSmooth.setTime (0.002f, sr);
+    // Long enough windows that the make-up follows the loudness, not the waveform (no pumping)
+    crushInPower.setTime (0.40f, sr);
+    crushOutPower.setTime (0.40f, sr);
+    crushGain.setTime (0.30f, sr);
     dubDampL.setCutoff (3000.0f, sr);
     dubDampR.setCutoff (3000.0f, sr);
     onStep = 1.0f / (float) (0.008 * sr);
@@ -35,6 +39,9 @@ void ColorFxEngine::reset()
     onGain = 0.0f;
     switchFade = 1.0f;
     crushHold[0] = crushHold[1] = 0.0f;
+    crushInPower.reset();
+    crushOutPower.reset();
+    crushGain.reset (1.0f);
     crushCounter[0] = crushCounter[1] = 0.0f;
 }
 
@@ -188,8 +195,17 @@ void ColorFxEngine::process (juce::AudioBuffer<float>& buffer, const Settings& s
                             crushHold[ch] = std::copysign ((std::pow (1.0f + mu, std::abs (q)) - 1.0f) / mu, q);
                         }
                         const auto o = filter.process (ch, crushHold[ch]);
-                        out[ch] = in[ch] + ((left ? o.lp : o.hp) - in[ch]) * presence;
+                        out[ch] = left ? o.lp : o.hp;
                     }
+
+                    // Loudness match: the crushed signal is scaled so its RMS follows the input's,
+                    // so turning COLOR / PARAMETER changes the sound, not the volume (the saturator alone
+                    // can be ~20 dB hotter than the input, hence the wide range)
+                    const float inPow = crushInPower.process (0.5f * (xL * xL + xR * xR));
+                    const float outPow = crushOutPower.process (0.5f * (out[0] * out[0] + out[1] * out[1]));
+                    const float makeup = crushGain.process (juce::jlimit (0.03f, 4.0f, std::sqrt ((inPow + 1.0e-9f) / (outPow + 1.0e-9f))));
+                    for (int ch = 0; ch < 2; ++ch)
+                        out[ch] = in[ch] + (out[ch] * makeup - in[ch]) * presence;
                     yL = out[0];
                     yR = out[1];
                     break;

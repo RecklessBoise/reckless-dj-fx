@@ -6,7 +6,7 @@ using namespace rdfx::ui;
 
 RecklessDJFXContent::RecklessDJFXContent (RecklessDJFXProcessor& p)
     : processor (p), presets (p.getPresetManager()),
-      colorPanel (p.apvts), beatPanel (p), browser (p.getPresetManager())
+      bpmDisplay (p), colorPanel (p.apvts), beatPanel (p), browser (p.getPresetManager())
 {
     prevButton.onClick = [this] { presets.step (browser.getBank(), -1); };
     nextButton.onClick = [this] { presets.step (browser.getBank(), 1); };
@@ -27,24 +27,10 @@ RecklessDJFXContent::RecklessDJFXContent (RecklessDJFXProcessor& p)
     presetName.setTooltip ("Open the preset browser");
     for (auto* b : { &prevButton, &nextButton, &saveButton, &browseButton, &sizeButton, &tapButton })
         b->setName (b->getButtonText());
-    bpmMode.setColour (juce::ComboBox::textColourId, hw::Col::lcdText);
-    bpmSlider.setColour (juce::Slider::textBoxTextColourId, hw::Col::lcdText);
-
-    bpmMode.addItemList ({ "HOST", "TAP", "MANUAL" }, 1);
-    bpmModeAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (p.apvts, ParamID::bpmMode, bpmMode);
-
-    bpmSlider.setSliderStyle (juce::Slider::LinearBarVertical);
-    bpmSlider.setTextBoxStyle (juce::Slider::TextBoxAbove, false, 70, 30);
-    bpmSlider.setColour (juce::Slider::trackColourId, Colours::control);
-    bpmSlider.setTooltip ("Manual / tap BPM (drag up and down)");
-    bpmAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (p.apvts, ParamID::bpm, bpmSlider);
-    bpmSlider.textFromValueFunction = [] (double v) { return juce::String (v, 1) + " BPM"; };
-    bpmSlider.valueFromTextFunction = [] (const juce::String& t) { return t.getDoubleValue(); };
-    bpmSlider.updateText();
-    bpmSlider.onDragStart = [this] { setParam (processor.apvts, ParamID::bpmMode, (float) BpmMode::Manual); };
+    tapButton.setTooltip ("Tap tempo (only without a DAW tempo: in a DAW the BPM follows the DAW)");
 
     for (auto* c : std::initializer_list<juce::Component*> { &prevButton, &nextButton, &presetName, &saveButton, &browseButton,
-                                                             &sizeButton, &tapButton, &heart, &bpmMode, &bpmSlider,
+                                                             &sizeButton, &tapButton, &heart, &bpmDisplay,
                                                              &colorPanel, &beatPanel })
         addAndMakeVisible (c);
 
@@ -135,8 +121,7 @@ void RecklessDJFXContent::resized()
     saveButton.setBounds (612, 4, 72, 56);
     browseButton.setBounds (684, 4, 90, 56);
 
-    bpmSlider.setBounds (776, 4, 104, 56);
-    bpmMode.setBounds (880, 4, 92, 56);
+    bpmDisplay.setBounds (776, 4, 196, 56);
     tapButton.setBounds (972, 4, 60, 56);
     sizeButton.setBounds (1032, 4, 62, 56);
 
