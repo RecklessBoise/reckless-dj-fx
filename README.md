@@ -42,7 +42,7 @@ Plugin d'effets **VST3 / AU** (macOS, + VST3 Windows via la CI) qui reprend tout
 ## Interface « hardware »
 Toute l'interface est dessinée par le code, sans aucune image embarquée, avec un rendu matériel en 3D :
 - façade en aluminium anodisé brossé, avec rayures, traces d'usure et vis ;
-- potards noir mat à jupe crantée, comme sur la table, avec de légères éraflures qui tournent avec le potard ;
+- potards à jupe crantée et chapeau en alu brossé gris : reflet calculé pixel par pixel et rayures qui tournent avec le potard ;
 - touches en caoutchouc rétroéclairées ;
 - écran couleur avec reflet de vitre ;
 - X-Pad en verre noir ;

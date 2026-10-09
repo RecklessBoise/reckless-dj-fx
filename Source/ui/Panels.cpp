@@ -155,8 +155,8 @@ ToggleBtn::ToggleBtn (APVTS& state, const char* paramID, const juce::String& tex
 //==============================================================================
 ColorFxPanel::ColorFxPanel (APVTS& state)
     : types (state, ParamID::colorType, colorFxNames(), 2, Col::colorLed, ParamID::colorOn),
-      colorKnob (state, ParamID::colorAmt, "COLOR", "matte", 11, true, std::make_unique<CenterLockSlider> (state)),
-      paramKnob (state, ParamID::colorParam, "PARAMETER", "matte", 11, false),
+      colorKnob (state, ParamID::colorAmt, "COLOR", "metal", 11, true, std::make_unique<CenterLockSlider> (state)),
+      paramKnob (state, ParamID::colorParam, "PARAMETER", "metal", 11, false),
       onButton (state, ParamID::colorOn, "ON", Col::colorLed),
       lockButton (state, ParamID::centerLock, "CENTER LOCK", Col::colorLed)
 {
@@ -434,9 +434,9 @@ BeatFxPanel::BeatFxPanel (RecklessDJFXProcessor& p)
       screen (p),
       selectKnob (state, ParamID::beatType, "FX SELECT", "encoder", kNumBeatFx, false),
       xpad (state),
-      timeKnob (state, ParamID::timeMs, "TIME", "matte", 11, false),
-      levelKnob (state, ParamID::level, "LEVEL/DEPTH", "matte", 11, false),
-      outKnob (state, ParamID::outGain, "OUTPUT", "matte", 11, false),
+      timeKnob (state, ParamID::timeMs, "TIME", "metal", 11, false),
+      levelKnob (state, ParamID::level, "LEVEL/DEPTH", "metal", 11, false),
+      outKnob (state, ParamID::outGain, "OUTPUT", "metal", 11, false),
       low (state, ParamID::fxLow, "LOW", Col::beatLed),
       mid (state, ParamID::fxMid, "MID", Col::beatLed),
       hi (state, ParamID::fxHi, "HI", Col::beatLed),

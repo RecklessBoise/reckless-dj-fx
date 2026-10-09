@@ -39,7 +39,7 @@ public:
     juce::Font getLabelFont (juce::Label&) override;
 
     /** Component properties understood by this look:
-          Slider:  "knob" = "matte" | "encoder", "ticks" = int, "detent" = bool
+          Slider:  "knob" = "metal" | "encoder", "ticks" = int, "detent" = bool
           Button:  "btn"  = "round" | "rubber" (default) | "flat" (browser UI)            */
     static juce::Colour accentOf (const juce::Component& c);
     static void setAccent (juce::Component& c, juce::Colour accent);

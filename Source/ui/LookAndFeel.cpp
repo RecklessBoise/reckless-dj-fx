@@ -53,7 +53,7 @@ void LookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int w, int 
                                     float startAngle, float endAngle, juce::Slider& s)
 {
     const auto style = s.getProperties()["knob"].toString();
-    const auto knobStyle = style == "encoder" ? hw::KnobStyle::Encoder : hw::KnobStyle::Matte;
+    const auto knobStyle = style == "encoder" ? hw::KnobStyle::Encoder : hw::KnobStyle::Metal;
     const int ticks = s.getProperties().getWithDefault ("ticks", 11);
     const bool detent = s.getProperties().getWithDefault ("detent", false);
     const float angle = startAngle + pos * (endAngle - startAngle);
