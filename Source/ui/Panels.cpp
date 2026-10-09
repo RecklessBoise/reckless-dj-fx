@@ -40,7 +40,8 @@ static void caption (juce::Graphics& g, const juce::String& text, juce::Rectangl
 }
 
 //==============================================================================
-ChoiceButtons::ChoiceButtons (APVTS& state, const char* paramID, const juce::StringArray& labels, int cols, juce::Colour led)
+ChoiceButtons::ChoiceButtons (APVTS& state, const char* paramID, const juce::StringArray& labels, int cols, juce::Colour led,
+                              const char* gateParamID)
     : columns (cols)
 {
     for (int i = 0; i < labels.size(); ++i)
@@ -48,19 +49,30 @@ ChoiceButtons::ChoiceButtons (APVTS& state, const char* paramID, const juce::Str
         auto* b = buttons.add (new juce::TextButton (labels[i]));
         b->setName (juce::String (paramID) + juce::String (i));
         LookAndFeel::setAccent (*b, led);
-        b->onClick = [this, i] { attachment->setValueAsCompleteGesture ((float) i); };
+        b->onClick = [this, i]
+        {
+            if (onPick) onPick (i);
+            else attachment->setValueAsCompleteGesture ((float) i);
+        };
         addAndMakeVisible (b);
     }
 
     attachment = std::make_unique<juce::ParameterAttachment> (
-        *state.getParameter (paramID),
-        [this] (float v)
-        {
-            const int idx = juce::roundToInt (v);
-            for (int i = 0; i < buttons.size(); ++i)
-                buttons[i]->setToggleState (i == idx, juce::dontSendNotification);
-        });
+        *state.getParameter (paramID), [this] (float v) { selected = juce::roundToInt (v); updateLights(); });
     attachment->sendInitialUpdate();
+
+    if (gateParamID != nullptr)
+    {
+        gateAttachment = std::make_unique<juce::ParameterAttachment> (
+            *state.getParameter (gateParamID), [this] (float v) { gateOn = v > 0.5f; updateLights(); });
+        gateAttachment->sendInitialUpdate();
+    }
+}
+
+void ChoiceButtons::updateLights()
+{
+    for (int i = 0; i < buttons.size(); ++i)
+        buttons[i]->setToggleState (gateOn && i == selected, juce::dontSendNotification);
 }
 
 void ChoiceButtons::resized()
@@ -140,14 +152,29 @@ ToggleBtn::ToggleBtn (APVTS& state, const char* paramID, const juce::String& tex
 
 //==============================================================================
 ColorFxPanel::ColorFxPanel (APVTS& state)
-    : types (state, ParamID::colorType, colorFxNames(), 2, Col::colorLed),
-      colorKnob (state, ParamID::colorAmt, "COLOR", "metal", 11, true, std::make_unique<CenterLockSlider> (state)),
-      paramKnob (state, ParamID::colorParam, "PARAMETER", "black", 11, false),
+    : types (state, ParamID::colorType, colorFxNames(), 2, Col::colorLed, ParamID::colorOn),
+      colorKnob (state, ParamID::colorAmt, "COLOR", "matte", 11, true, std::make_unique<CenterLockSlider> (state)),
+      paramKnob (state, ParamID::colorParam, "PARAMETER", "matte", 11, false),
       onButton (state, ParamID::colorOn, "ON", Col::colorLed),
       lockButton (state, ParamID::centerLock, "CENTER LOCK", Col::colorLed)
 {
     colorKnob.getSlider().setDoubleClickReturnValue (true, 0.0);
     paramKnob.getSlider().setDoubleClickReturnValue (true, 0.5);
+
+    // Like the mixer: press a Color FX key to switch it on, press the lit key again to switch it off
+    types.onPick = [&state] (int i)
+    {
+        const bool on = getParam (state, ParamID::colorOn) > 0.5f;
+        if (on && (int) getParam (state, ParamID::colorType) == i)
+        {
+            setParam (state, ParamID::colorOn, 0.0f);
+        }
+        else
+        {
+            setParam (state, ParamID::colorType, (float) i);
+            setParam (state, ParamID::colorOn, 1.0f);
+        }
+    };
     for (auto* c : std::initializer_list<juce::Component*> { &types, &colorKnob, &paramKnob, &onButton, &lockButton })
         addAndMakeVisible (c);
 }
@@ -337,7 +364,8 @@ void BeatScreen::paint (juce::Graphics& g)
             g.setColour (Col::lcdAccent);
             g.fillRoundedRectangle (row.reduced (0.0f, 1.0f), 3.0f);
         }
-        g.setColour (k == 0 ? juce::Colours::white : Col::lcdText.withAlpha (0.5f - 0.12f * (float) std::abs (k)));
+        // Neighbours stay readable (>= 4.5:1 on the black screen): they are clickable
+        g.setColour (k == 0 ? juce::Colours::white : Col::lcdText.withAlpha (std::abs (k) == 1 ? 0.78f : 0.62f));
         g.setFont (lcdFont (k == 0 ? 17.0f : 14.0f));
         g.drawText (beatFxNames()[t], row.reduced (8.0f, 0.0f), juce::Justification::centredLeft);
     }
@@ -404,9 +432,9 @@ BeatFxPanel::BeatFxPanel (RecklessDJFXProcessor& p)
       screen (p),
       selectKnob (state, ParamID::beatType, "FX SELECT", "encoder", kNumBeatFx, false),
       xpad (state),
-      timeKnob (state, ParamID::timeMs, "TIME", "metal", 11, false),
-      levelKnob (state, ParamID::level, "LEVEL/DEPTH", "metal", 11, false),
-      outKnob (state, ParamID::outGain, "OUTPUT", "black", 11, false),
+      timeKnob (state, ParamID::timeMs, "TIME", "matte", 11, false),
+      levelKnob (state, ParamID::level, "LEVEL/DEPTH", "matte", 11, false),
+      outKnob (state, ParamID::outGain, "OUTPUT", "matte", 11, false),
       low (state, ParamID::fxLow, "LOW", Col::beatLed),
       mid (state, ParamID::fxMid, "MID", Col::beatLed),
       hi (state, ParamID::fxHi, "HI", Col::beatLed),
@@ -447,17 +475,35 @@ void BeatFxPanel::stepBeat (int delta)
 
 void BeatFxPanel::timerCallback()
 {
-    timeKnob.setAlpha (getParam (state, ParamID::beatSync) > 0.5f ? 0.75f : 1.0f);
+    // TIME only acts when BEAT SYNC is off: grey it out otherwise
+    timeKnob.setAlpha (getParam (state, ParamID::beatSync) > 0.5f ? 0.45f : 1.0f);
 
-    // ON/OFF ring pulses with the tempo while the effect is engaged
+    // ON/OFF ring pulses with the tempo, only while the effect is audible
     const bool engaged = processor.isBeatFxEngaged();
-    const double beatPhase = std::fmod (juce::Time::getMillisecondCounterHiRes() * processor.getCurrentBpm() / 60000.0, 1.0);
-    onButton.getProperties().set ("glow", engaged ? 1.0 - beatPhase : 0.0);
-    if (engaged || onButton.getToggleState())
+    if (engaged)
+    {
+        const double beatPhase = std::fmod (juce::Time::getMillisecondCounterHiRes() * processor.getCurrentBpm() / 60000.0, 1.0);
+        onButton.getProperties().set ("glow", 1.0 - beatPhase);
         onButton.repaint();
+    }
+    else if ((double) onButton.getProperties()["glow"] != 0.0)
+    {
+        onButton.getProperties().set ("glow", 0.0);
+        onButton.repaint();
+    }
 
-    screen.repaint();
-    xpad.repaint();
+    // Screen and X-Pad: repaint only when something they show has changed
+    juce::String now;
+    for (auto* id : { ParamID::beatType, ParamID::beatIdx, ParamID::beatSync, ParamID::beatOn, ParamID::timeMs,
+                      ParamID::level, ParamID::quantize, ParamID::bpmMode })
+        now << getParam (state, id) << ";";
+    now << juce::String (processor.getCurrentBpm(), 1) << ";" << (int) engaged;
+    if (now != lastScreenState)
+    {
+        lastScreenState = now;
+        screen.repaint();
+        xpad.repaint();
+    }
 }
 
 void BeatFxPanel::paint (juce::Graphics& g)

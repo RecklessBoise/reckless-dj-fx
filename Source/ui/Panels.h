@@ -14,17 +14,25 @@ using APVTS = juce::AudioProcessorValueTreeState;
 void setParam (APVTS& state, const char* id, float realValue);
 float getParam (const APVTS& state, const char* id);
 
-/** A radio group of back-lit rubber keys bound to a choice parameter. */
+/** A radio group of back-lit rubber keys bound to a choice parameter.
+    With a `gateParamID` (a bool parameter), the selected key is only lit while that parameter is on. */
 class ChoiceButtons final : public juce::Component
 {
 public:
-    ChoiceButtons (APVTS& state, const char* paramID, const juce::StringArray& labels, int columns, juce::Colour led);
+    ChoiceButtons (APVTS& state, const char* paramID, const juce::StringArray& labels, int columns, juce::Colour led,
+                   const char* gateParamID = nullptr);
     void resized() override;
 
+    /** Replaces the default "select this choice" click behaviour. */
+    std::function<void (int index)> onPick;
+
 private:
+    void updateLights();
+
     juce::OwnedArray<juce::TextButton> buttons;
-    std::unique_ptr<juce::ParameterAttachment> attachment;
-    int columns;
+    std::unique_ptr<juce::ParameterAttachment> attachment, gateAttachment;
+    int columns, selected = 0;
+    bool gateOn = true;
 };
 
 /** Hardware knob bound to a parameter. The caption is printed on the faceplate by the panel. */
@@ -126,6 +134,7 @@ private:
     void stepBeat (int delta);
 
     RecklessDJFXProcessor& processor;
+    juce::String lastScreenState;
     APVTS& state;
     BeatScreen screen;
     Knob selectKnob;

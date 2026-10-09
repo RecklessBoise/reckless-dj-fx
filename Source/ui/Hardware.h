@@ -4,7 +4,7 @@
 
 /**
     Procedural "real hardware" rendering: brushed anodised faceplate with scratches and wear,
-    knurled knobs with spun-aluminium caps, back-lit rubber buttons, LCD glass, screws and silk-screen print.
+    knurled matte-black knobs, back-lit rubber buttons, LCD glass, screws and silk-screen print.
     Everything is drawn in code (no bitmaps shipped) and deterministic, so the wear looks the same every time.
 */
 namespace rdfx::hw
@@ -25,7 +25,8 @@ namespace Col
     inline const juce::Colour lcdBlue    { 0xff41b8ff };
 }
 
-enum class KnobStyle { Metal, Black, Encoder };
+/** All knobs are matte black like the mixer; the encoder has a finer knurl and a dot pointer. */
+enum class KnobStyle { Matte, Encoder };
 
 /** Brushed dark metal with scratches, scuffs and edge wear. Cached per size. */
 const juce::Image& faceplate (int width, int height, juce::uint32 seed);

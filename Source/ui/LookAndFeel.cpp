@@ -53,9 +53,7 @@ void LookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int w, int 
                                     float startAngle, float endAngle, juce::Slider& s)
 {
     const auto style = s.getProperties()["knob"].toString();
-    const auto knobStyle = style == "encoder" ? hw::KnobStyle::Encoder
-                         : style == "black"   ? hw::KnobStyle::Black
-                                              : hw::KnobStyle::Metal;
+    const auto knobStyle = style == "encoder" ? hw::KnobStyle::Encoder : hw::KnobStyle::Matte;
     const int ticks = s.getProperties().getWithDefault ("ticks", 11);
     const bool detent = s.getProperties().getWithDefault ("detent", false);
     const float angle = startAngle + pos * (endAngle - startAngle);
@@ -141,9 +139,10 @@ void LookAndFeel::drawButtonText (juce::Graphics& g, juce::TextButton& b, bool, 
     if (down) r.translate (0.0f, 1.0f);
     const bool on = b.getToggleState();
     g.setFont (hw::printFont (juce::jlimit (9.0f, 14.0f, r.getHeight() * 0.42f)));
-    g.setColour (juce::Colours::black.withAlpha (on ? 0.35f : 0.6f));
+    // Lit keys get a dark legend (white on orange/cyan is below 3:1), unlit keys a white one
+    g.setColour (on ? juce::Colours::white.withAlpha (0.35f) : juce::Colours::black.withAlpha (0.6f));
     g.drawFittedText (b.getButtonText(), r.translated (0.0f, 1.0f).toNearestInt(), juce::Justification::centred, 2, 0.75f);
-    g.setColour (on ? juce::Colours::white : hw::Col::print.withAlpha (b.isEnabled() ? 0.88f : 0.35f));
+    g.setColour (on ? juce::Colour (0xff111214) : hw::Col::print.withAlpha (b.isEnabled() ? 0.88f : 0.35f));
     g.drawFittedText (b.getButtonText(), r.toNearestInt(), juce::Justification::centred, 2, 0.75f);
 }
 

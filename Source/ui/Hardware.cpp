@@ -70,47 +70,6 @@ void scratch (juce::Graphics& g, juce::Random& rng, juce::Rectangle<float> area,
         g.strokePath (p, juce::PathStrokeType (width * 0.8f));
     }
 }
-/** Spun-aluminium cap rendered per pixel (no wedge seams): light gradient, concentric lathe rings
-    and the anisotropic "bow-tie" highlight typical of turned metal. Cached by pixel size. */
-const juce::Image& spunCap (int diameter, juce::uint32 seed)
-{
-    static std::map<std::pair<int, juce::uint32>, juce::Image> cache;
-    auto key = std::make_pair (diameter, seed);
-    if (auto it = cache.find (key); it != cache.end())
-        return it->second;
-
-    juce::Image img (juce::Image::ARGB, diameter, diameter, true);
-    juce::Random rng ((juce::int64) seed);
-    const float R = (float) diameter * 0.5f;
-    std::vector<float> rings ((size_t) diameter + 2);
-    float drift = 0.0f;
-    for (auto& v : rings)
-    {
-        drift = drift * 0.7f + (rng.nextFloat() - 0.5f) * 0.05f;
-        v = drift + (rng.nextFloat() - 0.5f) * 0.035f;
-    }
-
-    juce::Image::BitmapData data (img, juce::Image::BitmapData::writeOnly);
-    for (int y = 0; y < diameter; ++y)
-        for (int x = 0; x < diameter; ++x)
-        {
-            const float dx = (float) x + 0.5f - R, dy = (float) y + 0.5f - R;
-            const float dist = std::sqrt (dx * dx + dy * dy);
-            if (dist > R + 0.5f)
-                continue;
-            const float edgeAlpha = juce::jlimit (0.0f, 1.0f, R + 0.5f - dist);
-            const float th = std::atan2 (dy, dx);
-            const float lin = -(dx + dy) / (R * 1.4142f);                              // light from top-left
-            const float aniso = std::pow (std::abs (std::cos (th + juce::MathConstants<float>::pi * 0.25f)), 10.0f);
-            const float centreFade = juce::jlimit (0.0f, 1.0f, dist / (R * 0.15f));
-            float lum = 0.58f + 0.22f * lin + 0.40f * aniso * centreFade + rings[(size_t) (dist * 1.6f) % rings.size()];
-            lum -= 0.10f * std::pow (dist / R, 6.0f);                                  // darker rim
-            const auto v = (float) juce::jlimit (0.0f, 1.0f, lum);
-            data.setPixelColour (x, y, juce::Colour::fromFloatRGBA (v * 0.97f, v * 0.985f, v, edgeAlpha));
-        }
-
-    return cache.emplace (key, img).first->second;
-}
 } // namespace
 
 juce::uint32 seedOf (const juce::String& s) { return (juce::uint32) s.hashCode(); }
@@ -287,23 +246,22 @@ void drawKnob (juce::Graphics& g, juce::Rectangle<float> bounds, float angle, Kn
     }
 
     // Skirt
-    const bool metalSkirt = style == KnobStyle::Encoder;
+    const bool fineKnurl = style == KnobStyle::Encoder;
     {
-        juce::ColourGradient grad (metalSkirt ? juce::Colour (0xff8a8e95) : juce::Colour (0xff3b3e44),
-                                   c.translated (-r * 0.4f, -r * 0.5f),
-                                   metalSkirt ? juce::Colour (0xff1e2023) : juce::Colour (0xff07080a),
+        juce::ColourGradient grad (juce::Colour (0xff34373c), c.translated (-r * 0.4f, -r * 0.5f),
+                                   juce::Colour (0xff07080a),
                                    c.translated (r * 0.9f, r * 0.9f), true);
         g.setGradientFill (grad);
         g.fillEllipse (juce::Rectangle<float> (r * 2.0f, r * 2.0f).withCentre (c));
     }
 
     // Knurling (rotates with the knob)
-    const int ridges = metalSkirt ? 72 : 48;
+    const int ridges = fineKnurl ? 72 : 48;
     for (int k = 0; k < ridges; ++k)
     {
         const float th = angle + twoPi * (float) k / (float) ridges;
         const float lit = juce::jmax (0.0f, std::cos (th - kLightDir));
-        g.setColour (juce::Colours::white.withAlpha ((metalSkirt ? 0.10f : 0.05f) + (metalSkirt ? 0.35f : 0.20f) * lit));
+        g.setColour (juce::Colours::white.withAlpha (0.04f + 0.16f * lit));
         g.drawLine ({ polar (c, r * 0.80f, th), polar (c, r * 0.975f, th) }, juce::jmax (0.7f, r * 0.022f));
         const float th2 = th + twoPi * 0.5f / (float) ridges;
         g.setColour (juce::Colours::black.withAlpha (0.45f));
@@ -324,26 +282,26 @@ void drawKnob (juce::Graphics& g, juce::Rectangle<float> bounds, float angle, Kn
     g.setColour (juce::Colours::black.withAlpha (0.65f));
     g.fillEllipse (capRect.expanded (capR * 0.06f));
 
-    const bool metalCap = style == KnobStyle::Metal;
-    if (metalCap)
+    // Matte black plastic cap: soft diffuse shading, no specular, fine grain
     {
-        // Render the cap at the device resolution so it stays crisp when the editor is scaled up
-        const float pixelScale = juce::jmax (1.0f, g.getInternalContext().getPhysicalPixelScaleFactor());
-        // quantised to 16 px steps so free resizing does not fill the cache with every size
-        const int diameter = juce::jlimit (32, 1024, ((juce::roundToInt (capR * 2.0f * pixelScale) + 15) / 16) * 16);
-        g.drawImage (spunCap (diameter, seed), capRect, juce::RectanglePlacement::stretchToFit);
-    }
-    else
-    {
-        juce::ColourGradient grad (juce::Colour (0xff3a3d43), c.translated (-capR * 0.5f, -capR * 0.6f),
-                                   juce::Colour (0xff0c0d0f), c.translated (capR * 0.9f, capR * 0.9f), true);
+        juce::ColourGradient grad (juce::Colour (0xff2c2e33), c.translated (-capR * 0.45f, -capR * 0.55f),
+                                   juce::Colour (0xff111214), c.translated (capR * 0.9f, capR * 0.9f), true);
         g.setGradientFill (grad);
         g.fillEllipse (capRect);
-        // Glossy specular blob
-        const auto spec = juce::Rectangle<float> (capR * 1.1f, capR * 0.7f).withCentre (c.translated (-capR * 0.25f, -capR * 0.45f));
-        g.setGradientFill (juce::ColourGradient (juce::Colours::white.withAlpha (0.20f), spec.getCentre(),
-                                                 juce::Colours::transparentWhite, spec.getTopRight(), true));
-        g.fillEllipse (spec);
+        g.setGradientFill (juce::ColourGradient (juce::Colours::white.withAlpha (0.05f), c.translated (-capR * 0.3f, -capR * 0.4f),
+                                                 juce::Colours::transparentWhite, c.translated (capR * 0.6f, capR * 0.2f), true));
+        g.fillEllipse (capRect);
+
+        juce::Graphics::ScopedSaveState save (g);
+        juce::Path clip;
+        clip.addEllipse (capRect);
+        g.reduceClipRegion (clip);
+        const int grains = (int) (capR * capR * 0.35f);
+        for (int i = 0; i < grains; ++i)
+        {
+            g.setColour ((rng.nextBool() ? juce::Colours::white : juce::Colours::black).withAlpha (0.035f));
+            g.fillRect (capRect.getX() + rng.nextFloat() * capRect.getWidth(), capRect.getY() + rng.nextFloat() * capRect.getHeight(), 1.0f, 1.0f);
+        }
     }
 
     // Wear: scratches on the cap (rotate with the knob)
@@ -363,7 +321,7 @@ void drawKnob (juce::Graphics& g, juce::Rectangle<float> bounds, float angle, Kn
             s.startNewSubPath (p0);
             s.quadraticTo (p0 + juce::Point<float> (std::cos (dir + 0.3f), std::sin (dir + 0.3f)) * len * 0.5f,
                            p0 + juce::Point<float> (std::cos (dir), std::sin (dir)) * len);
-            g.setColour (juce::Colours::white.withAlpha ((metalCap ? 0.18f : 0.10f) + rng.nextFloat() * 0.15f));
+            g.setColour (juce::Colours::white.withAlpha (0.05f + rng.nextFloat() * 0.08f)); // faint scuffs on matte plastic
             g.strokePath (s, juce::PathStrokeType (0.5f + rng.nextFloat() * 0.5f), rot);
         }
     }
@@ -376,7 +334,7 @@ void drawKnob (juce::Graphics& g, juce::Rectangle<float> bounds, float angle, Kn
     }
     else
     {
-        const auto p0 = polar (c, metalCap ? capR * 0.18f : capR * 0.30f, angle);
+        const auto p0 = polar (c, capR * 0.30f, angle);
         const auto p1 = polar (c, r * 0.93f, angle);
         g.setColour (juce::Colours::black.withAlpha (0.75f));
         g.drawLine ({ p0, p1 }, juce::jmax (2.6f, r * 0.075f));
@@ -385,7 +343,7 @@ void drawKnob (juce::Graphics& g, juce::Rectangle<float> bounds, float angle, Kn
     }
 
     // Cap edge highlight
-    g.setColour (juce::Colours::white.withAlpha (metalCap ? 0.35f : 0.15f));
+    g.setColour (juce::Colours::white.withAlpha (0.12f));
     juce::Path edge;
     edge.addCentredArc (c.x, c.y, capR - 0.6f, capR - 0.6f, 0.0f, -2.3f, 0.2f, true);
     g.strokePath (edge, juce::PathStrokeType (0.9f));
