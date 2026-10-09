@@ -15,8 +15,8 @@ namespace Col
     inline const juce::Colour faceplateHi { 0xff2a2c30 };
     inline const juce::Colour print      { 0xffe4e6ea };  // white silk-screen
     inline const juce::Colour printDim   { 0xff9aa0aa };
-    inline const juce::Colour beatLed    { 0xffff6a1a };  // orange back-light
-    inline const juce::Colour colorLed   { 0xff35c9ff };  // cyan back-light
+    inline const juce::Colour beatLed    { 0xffee7633 };  // orange back-light (softened)
+    inline const juce::Colour colorLed   { 0xff4cbde8 };  // cyan back-light (softened)
     inline const juce::Colour onRing     { 0xff3d9bff };  // ON/OFF ring
     inline const juce::Colour like       { 0xffff3d6e };
     inline const juce::Colour lcdBg      { 0xff05080c };
@@ -42,7 +42,7 @@ void drawPrintedFrame (juce::Graphics&, juce::Rectangle<float> area, const juce:
 
 /** Knob. `angle` in radians (0 = 12 o'clock). Ticks are the printed scale on the faceplate. */
 void drawKnob (juce::Graphics&, juce::Rectangle<float> bounds, float angle, KnobStyle style, juce::uint32 seed,
-               float startAngle, float endAngle, int numTicks, bool centreDetent);
+               float startAngle, float endAngle, int numTicks, bool centreDetent, bool hover = false);
 
 /** Back-lit rubber key. `led` is the light colour when on. */
 void drawRubberButton (juce::Graphics&, juce::Rectangle<float> r, bool on, bool over, bool down, juce::Colour led,

@@ -97,6 +97,8 @@ Knob::Knob (APVTS& state, const char* paramID, const juce::String& name, const c
     slider->setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
     slider->setRotaryParameters (juce::degreesToRadians (-150.0f), juce::degreesToRadians (150.0f), true);
     slider->setMouseDragSensitivity (220);
+    slider->setMouseCursor (juce::MouseCursor::UpDownResizeCursor);
+    slider->setRepaintsOnMouseActivity (true);
     slider->getProperties().set ("knob", style);
     slider->getProperties().set ("ticks", ticks);
     slider->getProperties().set ("detent", detent);
@@ -511,7 +513,9 @@ void BeatFxPanel::paint (juce::Graphics& g)
     screws (g, getLocalBounds(), "beat");
     drawPrinted (g, "BEAT FX", { 30.0f, 14.0f, 200.0f, 22.0f }, 16.0f, juce::Justification::centredLeft);
 
-    caption (g, "FX SELECT", selectKnob.getBounds());
+    drawPrintedFrame (g, { 424.0f, 34.0f, 310.0f, 150.0f }, "SELECT");
+    drawPrintedFrame (g, { 424.0f, 204.0f, 310.0f, 70.0f }, "MODE");
+    caption (g, juce::String::fromUTF8 ("\xe2\x97\x84 FX SELECT \xe2\x96\xba"), selectKnob.getBounds());
     drawPrinted (g, "BEAT", { (float) beatDown.getX(), (float) beatDown.getY() - 8.0f, (float) (beatUp.getRight() - beatDown.getX()), 12.0f },
                  11.0f, juce::Justification::centred, 0.8f);
     drawPrinted (g, "X-PAD", { 28.0f, (float) xpad.getY() - 14.0f, 100.0f, 14.0f }, 11.0f, juce::Justification::centredLeft, 0.8f);

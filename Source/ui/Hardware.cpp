@@ -217,7 +217,7 @@ void drawPrintedFrame (juce::Graphics& g, juce::Rectangle<float> a, const juce::
 }
 
 void drawKnob (juce::Graphics& g, juce::Rectangle<float> bounds, float angle, KnobStyle style, juce::uint32 seed,
-               float startAngle, float endAngle, int numTicks, bool centreDetent)
+               float startAngle, float endAngle, int numTicks, bool centreDetent, bool hover)
 {
     juce::Random rng ((juce::int64) seed);
     const auto c = bounds.getCentre();
@@ -235,6 +235,13 @@ void drawKnob (juce::Graphics& g, juce::Rectangle<float> bounds, float angle, Kn
             g.setColour (Col::print.withAlpha (major ? 0.9f : 0.55f));
             g.drawLine ({ polar (c, R - (major ? 8.0f : 6.0f), a), polar (c, R - 1.0f, a) }, major ? 1.8f : 1.2f);
         }
+    }
+
+    // Hover: a faint ring tells the knob can be grabbed
+    if (hover)
+    {
+        g.setColour (Col::print.withAlpha (0.22f));
+        g.drawEllipse (juce::Rectangle<float> ((r + 3.0f) * 2.0f, (r + 3.0f) * 2.0f).withCentre (c), 1.5f);
     }
 
     // Drop shadow
@@ -363,8 +370,8 @@ void drawRubberButton (juce::Graphics& g, juce::Rectangle<float> r, bool on, boo
     {
         for (int i = 4; i >= 1; --i)
         {
-            g.setColour (led.withAlpha (0.07f));
-            g.fillRoundedRectangle (r.expanded (2.0f + (float) i * 1.6f), corner + (float) i * 2.0f);
+            g.setColour (led.withAlpha (0.045f));
+            g.fillRoundedRectangle (r.expanded (2.0f + (float) i * 1.4f), corner + (float) i * 2.0f);
         }
     }
 

@@ -60,7 +60,8 @@ void LookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int w, int 
     auto bounds = juce::Rectangle<int> (x, y, w, h).toFloat();
     bounds = bounds.withSizeKeepingCentre (juce::jmin (bounds.getWidth(), bounds.getHeight()),
                                            juce::jmin (bounds.getWidth(), bounds.getHeight()));
-    hw::drawKnob (g, bounds, angle, knobStyle, hw::seedOf (s.getName()), startAngle, endAngle, ticks, detent);
+    hw::drawKnob (g, bounds, angle, knobStyle, hw::seedOf (s.getName()), startAngle, endAngle, ticks, detent,
+                  s.isEnabled() && s.isMouseOverOrDragging());
     if (! s.isEnabled())
     {
         g.setColour (juce::Colours::black.withAlpha (0.4f));

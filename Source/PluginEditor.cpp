@@ -120,24 +120,25 @@ void RecklessDJFXContent::paint (juce::Graphics& g)
     g.drawText ("RECKLESS", 20, 0, 140, 64, juce::Justification::centredLeft);
     g.setColour (hw::Col::beatLed);
     g.drawText ("DJ FX", 146, 0, 80, 64, juce::Justification::centredLeft);
-    g.setFont (hw::printFont (8.5f, false));
-    g.setColour (hw::Col::print.withAlpha (0.55f));
-    g.drawText ("PROFESSIONAL EFFECTS UNIT", 21, 42, 220, 12, juce::Justification::centredLeft);
+    g.setFont (hw::printFont (11.0f, false));
+    g.setColour (hw::Col::print.withAlpha (0.82f));
+    g.drawText ("PROFESSIONAL EFFECTS UNIT", 21, 42, 210, 14, juce::Justification::centredLeft);
 }
 
 void RecklessDJFXContent::resized()
 {
-    prevButton.setBounds (236, 6, 48, 52);
-    presetName.setBounds (282, 6, 224, 52);
-    nextButton.setBounds (504, 6, 48, 52);
-    heart.setBounds (550, 6, 48, 52);
-    saveButton.setBounds (596, 6, 76, 52);
-    browseButton.setBounds (670, 6, 92, 52);
+    // Keys are 56 px boxes: 44 x 44 px visible rubber after the glow margin (comfortable click/touch targets)
+    prevButton.setBounds (232, 4, 56, 56);
+    presetName.setBounds (288, 4, 212, 56);
+    nextButton.setBounds (500, 4, 56, 56);
+    heart.setBounds (556, 4, 56, 56);
+    saveButton.setBounds (612, 4, 72, 56);
+    browseButton.setBounds (684, 4, 90, 56);
 
-    bpmSlider.setBounds (766, 6, 112, 52);
-    bpmMode.setBounds (876, 6, 96, 52);
-    tapButton.setBounds (970, 6, 62, 52);
-    sizeButton.setBounds (1030, 6, 64, 52);
+    bpmSlider.setBounds (776, 4, 104, 56);
+    bpmMode.setBounds (880, 4, 92, 56);
+    tapButton.setBounds (972, 4, 60, 56);
+    sizeButton.setBounds (1032, 4, 62, 56);
 
     colorPanel.setBounds (0, 64, 360, 600);
     beatPanel.setBounds (360, 64, 740, 600);
